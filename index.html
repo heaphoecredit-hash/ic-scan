@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>iOS专用修复版-证件扫描</title>
+    <title>强制后置相机修复版</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
-        /* === 样式保持原样，没有任何变化 === */
+        /* === 样式与之前保持一致，无变化 === */
         * { margin: 0; padding: 0; box-sizing: border-box; touch-action: manipulation; }
         body { 
             background: #e5e5e5; 
@@ -35,7 +35,6 @@
         .btn-main { background: #2563eb; color: white; }
         .btn-sec { background: #f1f5f9; color: #333; }
         
-        /* 相机界面 */
         .camera-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: black; z-index: 999; display: none; justify-content: center; align-items: center;
@@ -44,38 +43,22 @@
         .mask-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
         .guide-text { position: absolute; top: 12%; width: 100%; text-align: center; color: white; font-size: 16px; text-shadow: 0 2px 4px rgba(0,0,0,0.8); z-index: 20; }
         .guide-text b { color: #00ff00; }
-        
-        .filter-switch {
-            position: absolute; top: 18%; z-index: 30; background: rgba(0,0,0,0.6); 
-            padding: 8px 15px; border-radius: 20px; color: white; font-size: 13px; display: flex; align-items: center; gap: 8px;
-        }
-        .cam-actions {
-            position: absolute; bottom: 40px; width: 100%; display: flex; justify-content: space-around; align-items: center; z-index: 20;
-        }
+        .cam-actions { position: absolute; bottom: 40px; width: 100%; display: flex; justify-content: space-around; align-items: center; z-index: 20; }
         .shutter-btn { width: 72px; height: 72px; background: white; border-radius: 50%; border: 5px solid rgba(220,220,220,0.5); cursor: pointer; }
         .close-btn { color: white; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.3); font-size: 14px; padding: 10px 20px; border-radius: 20px; backdrop-filter: blur(5px);}
-        
-        #debug-info { position: fixed; top: 0; left: 0; background: rgba(0,0,0,0.5); color: #fff; font-size: 10px; z-index: 9999; display: none;}
         .generating .scan-slot { border: none; background: white; }
         .generating .slot-placeholder { display: none; }
     </style>
 </head>
 <body>
-    <div id="debug-info"></div>
-
+    
     <div class="paper-container" id="pdf-area">
-        <div class="scan-slot" onclick="initCamera('front')">
-            <div class="slot-placeholder" id="ph-front">
-                <h3>+ 身份证人像面</h3>
-                <p>点击拍摄 (自动优化)</p>
-            </div>
+        <div class="scan-slot" onclick="openCamera('front')">
+            <div class="slot-placeholder" id="ph-front"><h3>+ 身份证人像面</h3><p>点击拍摄</p></div>
             <img id="img-front">
         </div>
-        <div class="scan-slot" onclick="initCamera('back')">
-            <div class="slot-placeholder" id="ph-back">
-                <h3>+ 身份证国徽面</h3>
-                <p>点击拍摄 (自动优化)</p>
-            </div>
+        <div class="scan-slot" onclick="openCamera('back')">
+            <div class="slot-placeholder" id="ph-back"><h3>+ 身份证国徽面</h3><p>点击拍摄</p></div>
             <img id="img-back">
         </div>
     </div>
@@ -87,143 +70,100 @@
 
     <div class="camera-overlay" id="cam-modal">
         <video id="video" autoplay playsinline muted></video>
-        
         <svg class="mask-svg" width="100%" height="100%">
-            <defs>
-                <mask id="mask-layer">
-                    <rect x="0" y="0" width="100%" height="100%" fill="white" />
-                    <rect id="cutout-rect" fill="black" rx="8" ry="8" />
-                </mask>
-            </defs>
+            <defs><mask id="mask-layer"><rect x="0" y="0" width="100%" height="100%" fill="white" /><rect id="cutout-rect" fill="black" rx="8" ry="8" /></mask></defs>
             <rect x="0" y="0" width="100%" height="100%" fill="rgba(0,0,0,0.9)" mask="url(#mask-layer)" />
             <rect id="border-rect" fill="transparent" stroke="#00ff00" stroke-width="2" rx="8" ry="8" />
         </svg>
-
-        <div class="guide-text">请将证件<b>填满</b>绿框<br><span style="font-size:12px; opacity:0.8">(若非后置，请点右下角切换)</span></div>
-        <label class="filter-switch"><input type="checkbox" id="bw-mode" checked> 复印去底模式</label>
-
+        <div class="guide-text">请将证件<b>填满</b>绿框</div>
         <div class="cam-actions">
             <button class="close-btn" onclick="closeCam()">取消</button>
             <button class="shutter-btn" onclick="takePhoto()"></button>
-            <button class="close-btn" onclick="nextCamera()">切换镜头</button>
+            <button class="close-btn" onclick="toggleMode()">切换镜头</button>
         </div>
     </div>
 
     <script>
         let currentStream = null;
         let currentSide = '';
-        let videoDevices = []; // 存储所有摄像头
-        let currentDeviceIndex = 0; // 当前使用的摄像头索引
+        // 核心开关：true 代表我们要后置，false 代表要前置
+        let isBackCamera = true; 
         
         const video = document.getElementById('video');
         const modal = document.getElementById('cam-modal');
         const cutout = document.getElementById('cutout-rect');
         const border = document.getElementById('border-rect');
-        const debug = document.getElementById('debug-info');
 
-        // 1. 调整遮罩尺寸
         function adjustMask() {
             const sW = window.innerWidth; const sH = window.innerHeight;
-            // 扫描框宽度
-            const bW = sW * 0.88; 
-            const bH = bW / 1.585;
-            const x = (sW - bW) / 2; 
-            const y = (sH - bH) / 2 - 40;
-            
+            const bW = sW * 0.88; const bH = bW / 1.585;
+            const x = (sW - bW) / 2; const y = (sH - bH) / 2 - 40;
             cutout.setAttribute('x', x); cutout.setAttribute('y', y); cutout.setAttribute('width', bW); cutout.setAttribute('height', bH);
             border.setAttribute('x', x); border.setAttribute('y', y); border.setAttribute('width', bW); border.setAttribute('height', bH);
             return { x, y, w: bW, h: bH };
         }
 
-        // 2. 核心：启动相机（iOS 稳健版）
-        async function initCamera(side) {
+        // 1. 打开相机（入口）
+        function openCamera(side) {
             currentSide = side;
             adjustMask();
             modal.style.display = 'flex';
-            debug.innerText = "正在请求相机权限...";
+            startCameraStream();
+        }
 
-            // 第一次启动，先尝试请求环境相机 (Environment)
-            // iOS 有时候第一次会无视这个，默认给前置，但这能触发权限提示
+        // 2. 核心：启动流（不再查找设备ID，而是指定模式）
+        async function startCameraStream() {
+            // 先彻底停止旧流
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+            }
+
+            // 定义约束条件：根据 isBackCamera 开关决定
+            // exact: "environment" 是 iOS 强制后置的关键词
             const constraints = {
                 audio: false,
                 video: {
-                    facingMode: "environment", // 优先后置
+                    facingMode: isBackCamera ? { exact: "environment" } : "user",
                     width: { ideal: 1920 },
                     height: { ideal: 1080 }
                 }
             };
-
-            await startStream(constraints);
-            
-            // 启动成功后，立即获取所有设备列表，为“切换镜头”做准备
-            // 这一步必须在 getUserMedia 成功后做，否则 iOS 此时还看不到设备 ID
-            await getDevices();
-        }
-
-        // 3. 获取流并播放
-        async function startStream(constraints) {
-            if (currentStream) {
-                // 必须严格停止旧流，否则iOS无法切换
-                currentStream.getTracks().forEach(t => t.stop());
-            }
 
             try {
                 currentStream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = currentStream;
-                // 确保 iOS 播放视频
-                video.play().catch(e => console.log("Play error:", e));
             } catch (err) {
-                console.error(err);
-                alert("无法打开相机，请在设置中允许浏览器访问相机。");
-                debug.innerText = "Error: " + err.name;
-            }
-        }
-
-        // 4. 获取设备列表 (在获取权限后调用)
-        async function getDevices() {
-            if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
-            
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            // 过滤出视频输入设备
-            videoDevices = devices.filter(d => d.kind === 'videoinput');
-            
-            debug.innerText = `检测到 ${videoDevices.length} 个摄像头`;
-            
-            // 尝试找到当前正在使用的设备索引
-            const currentTrack = currentStream.getVideoTracks()[0];
-            const currentLabel = currentTrack.label;
-            
-            // 简单的匹配当前索引
-            currentDeviceIndex = videoDevices.findIndex(d => d.label === currentLabel);
-            if (currentDeviceIndex === -1) currentDeviceIndex = 0;
-        }
-
-        // 5. 核心修复：切换镜头 (循环切换 ID)
-        async function nextCamera() {
-            if (videoDevices.length < 2) {
-                alert("未检测到多个摄像头，无法切换");
-                // 重新尝试获取列表，防止第一次没获取到
-                await getDevices();
-                return;
-            }
-
-            // 索引 +1，循环
-            currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
-            const nextDeviceId = videoDevices[currentDeviceIndex].deviceId;
-
-            debug.innerText = `切换至摄像头 ${currentDeviceIndex + 1}/${videoDevices.length}`;
-
-            // 使用 deviceId 强制切换，这是 iOS 最认的方式
-            const newConstraints = {
-                audio: false,
-                video: {
-                    deviceId: { exact: nextDeviceId },
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 }
+                console.warn("First attempt failed:", err);
+                
+                // 如果第一次失败（比如设备不支持 exact 语法），尝试降级方案
+                if (isBackCamera) {
+                    try {
+                        // 降级1：去掉 exact，只请求 environment
+                        const fallbackConstraints = {
+                            audio: false,
+                            video: { facingMode: "environment" }
+                        };
+                        currentStream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+                        video.srcObject = currentStream;
+                    } catch (err2) {
+                        console.error("Fallback failed:", err2);
+                        // 降级2：什么都不要求，只要是个相机就行
+                        try {
+                            currentStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                            video.srcObject = currentStream;
+                        } catch(e) {
+                            alert("无法启动相机，请检查权限设置");
+                        }
+                    }
                 }
-            };
+            }
+        }
 
-            await startStream(newConstraints);
+        // 3. 切换镜头逻辑
+        function toggleMode() {
+            isBackCamera = !isBackCamera; // 翻转开关
+            startCameraStream(); // 重启相机
         }
 
         function closeCam() {
@@ -236,62 +176,36 @@
 
         function takePhoto() {
             if (!currentStream) return;
-            
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            
-            // 获取视频源尺寸
-            const vW = video.videoWidth;
-            const vH = video.videoHeight;
-            const sW = window.innerWidth;
-            const sH = window.innerHeight;
-            
-            // 计算 object-fit: cover 的裁剪区域
-            const vRatio = vW / vH;
-            const sRatio = sW / sH;
-            let renderW, renderH;
-            
-            if (sRatio > vRatio) {
-                renderW = sW; renderH = sW / vRatio;
-            } else {
-                renderH = sH; renderW = sH * vRatio;
-            }
-            
-            const scale = vW / renderW;
+            const vW = video.videoWidth; const vH = video.videoHeight;
+            const sW = window.innerWidth; const sH = window.innerHeight;
+            const vR = vW / vH; const sR = sW / sH;
+            let rW, rH;
+            if (sR > vR) { rW = sW; rH = sW / vR; } else { rH = sH; rW = sH * vR; }
+            const scale = vW / rW;
             const mask = adjustMask();
-            
-            // 计算相对于视频源的裁剪坐标
-            const offsetX = (renderW - sW) / 2;
-            const offsetY = (renderH - sH) / 2;
-            
-            const sx = (mask.x + offsetX) * scale;
-            const sy = (mask.y + offsetY) * scale;
-            const sw = mask.w * scale;
-            const sh = mask.h * scale;
-            
-            canvas.width = 1000;
-            canvas.height = 1000 / 1.585;
-            
+            const oX = (rW - sW) / 2; const oY = (rH - sH) / 2;
+            const sx = (mask.x + oX) * scale; const sy = (mask.y + oY) * scale;
+            const sw = mask.w * scale; const sh = mask.h * scale;
+            canvas.width = 1000; canvas.height = 1000 / 1.585;
             ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
 
-            // 复印滤镜
-            if(document.getElementById('bw-mode').checked) {
-                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const data = imgData.data;
-                for (let i = 0; i < data.length; i += 4) {
-                    const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-                    const val = gray > 110 ? 255 : gray * 0.7; // 强力去底
-                    data[i] = data[i+1] = data[i+2] = val;
-                }
-                ctx.putImageData(imgData, 0, 0);
+            // 自动美化（去底色）
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imgData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+                const val = gray > 110 ? 255 : gray * 0.7; 
+                data[i] = data[i+1] = data[i+2] = val;
             }
+            ctx.putImageData(imgData, 0, 0);
 
             const img = document.getElementById('img-' + currentSide);
             const ph = document.getElementById('ph-' + currentSide);
             img.src = canvas.toDataURL('image/jpeg', 0.9);
             img.style.display = 'block';
             ph.style.display = 'none';
-            
             closeCam();
         }
 
@@ -303,13 +217,12 @@
             el.classList.add('generating');
             html2pdf().set({
                 margin: 0,
-                filename: '身份证扫描件.pdf',
+                filename: '身份证复印件.pdf',
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
             }).from(el).save().then(() => el.classList.remove('generating'));
         }
-        
         window.onresize = adjustMask;
     </script>
 </body>
