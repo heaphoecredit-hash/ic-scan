@@ -3,169 +3,176 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>证件拍照上传修复版</title>
+    <title>身份证正反面上传</title>
     <style>
-        /* 1. 全局重置，防止浏览器默认边距影响布局 */
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-family: -apple-system, sans-serif;
             background-color: #f5f5f5;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            padding: 15px;
+            padding-bottom: 50px; /* 底部留白 */
         }
 
-        /* 2. 预览区域容器 - 解决“偏左”的核心 */
-        .preview-container {
-            width: 100%;
-            max-width: 400px; /* 限制最大宽度，模仿身份证比例 */
-            height: 250px;    /* 固定高度 */
-            background-color: #333; /* 深色背景，方便看清图片边界 */
-            border-radius: 8px;
-            border: 2px dashed #999;
-            
-            /* 【核心修复】Flex 布局强制内容居中 */
-            display: flex;
-            justify-content: center; /* 水平居中 */
-            align-items: center;     /* 垂直居中 */
-            overflow: hidden;
-            margin-bottom: 20px;
-            position: relative;
+        /* 单个卡片区域 */
+        .card-section {
+            background: #fff;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
 
-        /* 3. 图片本身 - 解决“变形/偏左”的核心 */
-        #preview-img {
-            display: block;
-            /* 只要图片存在就显示，否则隐藏 */
-            opacity: 0; 
-            transition: opacity 0.3s;
-            
-            /* 【绝对关键】无论图片横竖，都保持比例缩放放进框内 */
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain; 
-        }
-
-        /* 提示文字 */
-        .placeholder-text {
-            position: absolute;
-            color: #fff;
-            pointer-events: none; /* 让点击穿透 */
-        }
-
-        /* 4. 按钮样式 */
-        .upload-btn-wrapper {
-            position: relative;
-            overflow: hidden;
-            display: inline-block;
-        }
-
-        .btn {
-            border: 2px solid gray;
-            color: white;
-            background-color: #007bff;
-            padding: 12px 30px;
-            border-radius: 8px;
+        .section-title {
             font-size: 16px;
             font-weight: bold;
-            cursor: pointer;
-            width: 100%;
+            margin-bottom: 10px;
+            color: #333;
             text-align: center;
         }
 
-        /* 5. 真正的 input - 隐藏覆盖在按钮上 */
-        .upload-btn-wrapper input[type=file] {
-            font-size: 100px;
-            position: absolute;
-            left: 0;
-            top: 0;
-            opacity: 0;
+        /* 预览容器：保持 Flex 居中，解决安卓偏左问题 */
+        .preview-box {
             width: 100%;
-            height: 100%;
+            height: 200px;
+            background-color: #e0e0e0;
+            border: 2px dashed #999;
+            border-radius: 8px;
+            display: flex;           /* Flex布局 */
+            justify-content: center; /* 水平居中 */
+            align-items: center;     /* 垂直居中 */
+            overflow: hidden;
+            position: relative;
+            margin-bottom: 10px;
+        }
+
+        /* 提示文字 */
+        .placeholder {
+            color: #888;
+            font-size: 14px;
+            pointer-events: none;
+        }
+
+        /* 图片：保持比例，核心修复 */
+        .preview-img {
+            display: block;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain; /* 保证不被裁剪且居中 */
+            display: none;       /* 默认隐藏，有图再显示 */
+        }
+
+        /* 按钮包装器 */
+        .upload-btn {
+            position: relative;
+            width: 100%;
+            background-color: #007bff;
+            color: white;
+            text-align: center;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: bold;
+            overflow: hidden;
+        }
+
+        /* 隐藏的 input，铺满整个按钮 */
+        .upload-btn input[type=file] {
+            position: absolute;
+            left: 0; top: 0;
+            width: 100%; height: 100%;
+            opacity: 0;
             cursor: pointer;
         }
 
-        /* 加载中提示 */
-        #loading {
-            display: none;
-            margin-top: 10px;
+        /* 加载提示 */
+        .loading-text {
+            text-align: center;
+            font-size: 12px;
             color: #666;
+            margin-top: 5px;
+            display: none;
         }
     </style>
 </head>
 <body>
 
-    <div class="preview-container">
-        <span class="placeholder-text" id="placeholder">点击下方按钮拍照</span>
-        <img id="preview-img" src="" alt="预览图">
+    <div class="card-section">
+        <div class="section-title">身份证 - 正面 (头像面)</div>
+        
+        <div class="preview-box">
+            <span class="placeholder" id="text-front">暂无照片</span>
+            <img id="img-front" class="preview-img" alt="正面预览">
+        </div>
+
+        <div class="upload-btn">
+            📷 拍摄正面
+            <input type="file" accept="image/*" capture="environment" 
+                   onchange="handleFile(this, 'img-front', 'text-front')">
+        </div>
+        <div id="loading-img-front" class="loading-text">正在处理正面...</div>
     </div>
 
-    <div class="upload-btn-wrapper">
-        <button class="btn">📷 拍摄 / 上传证件</button>
-        <input type="file" id="file-input" accept="image/*" capture="environment" onchange="handleFile(this)">
-    </div>
+    <div class="card-section">
+        <div class="section-title">身份证 - 反面 (国徽面)</div>
+        
+        <div class="preview-box">
+            <span class="placeholder" id="text-back">暂无照片</span>
+            <img id="img-back" class="preview-img" alt="反面预览">
+        </div>
 
-    <div id="loading">正在处理图片，请稍候...</div>
+        <div class="upload-btn">
+            📷 拍摄反面
+            <input type="file" accept="image/*" capture="environment" 
+                   onchange="handleFile(this, 'img-back', 'text-back')">
+        </div>
+        <div id="loading-img-back" class="loading-text">正在处理反面...</div>
+    </div>
 
     <script>
-        function handleFile(input) {
+        /**
+         * 通用处理函数
+         * input: 文件输入框对象
+         * imgId: 要显示的图片标签 ID (如 img-front)
+         * textId: 要隐藏的文字标签 ID (如 text-front)
+         */
+        function handleFile(input, imgId, textId) {
             const file = input.files[0];
             if (!file) return;
 
-            // 显示加载状态
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('placeholder').style.display = 'none';
+            // 获取对应的加载提示 DOM
+            const loadingDom = document.getElementById('loading-' + imgId);
+            loadingDom.style.display = 'block';
 
-            // 1. 读取文件
             const reader = new FileReader();
             reader.onload = function(e) {
                 const img = new Image();
-                
-                // 确保图片加载完成后再处理
                 img.onload = function() {
-                    // 2. 创建 Canvas 进行格式清洗
+                    // 1. 创建 Canvas (核心：解决苹果格式和旋转问题)
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
 
-                    // 设置 Canvas 大小等于图片实际大小
+                    // 2. 尺寸对齐
                     canvas.width = img.width;
                     canvas.height = img.height;
 
-                    // 3. 绘制图片 (这一步会去除 iOS HEIC 的特殊编码)
+                    // 3. 绘制清洗
                     ctx.drawImage(img, 0, 0, img.width, img.height);
 
-                    // 4. 【核心】强制转为 JPG Base64
-                    // quality 0.7 适度压缩，防止文件过大导致上传慢
-                    const dataURL = canvas.toDataURL('image/jpeg', 0.7);
+                    // 4. 导出为标准 JPG Base64
+                    const dataURL = canvas.toDataURL('image/jpeg', 0.8);
 
-                    // 5. 显示图片
-                    const previewImg = document.getElementById('preview-img');
+                    // 5. 显示到界面
+                    const previewImg = document.getElementById(imgId);
+                    const placeholder = document.getElementById(textId);
+
                     previewImg.src = dataURL;
-                    previewImg.style.opacity = '1';
-
+                    previewImg.style.display = 'block'; // 显示图片
+                    placeholder.style.display = 'none'; // 隐藏文字
+                    
                     // 隐藏加载提示
-                    document.getElementById('loading').style.display = 'none';
-
-                    // === 注意 ===
-                    // 此时 dataURL 已经是标准的 JPG 格式字符串
-                    // 如果你要发给后台，就发这个 dataURL，或者把它转回 Blob
-                    console.log("图片已转换为标准 JPG，长度:", dataURL.length);
+                    loadingDom.style.display = 'none';
                 };
-
-                img.onerror = function() {
-                    alert("图片加载失败，请重试");
-                    document.getElementById('loading').style.display = 'none';
-                };
-
                 img.src = e.target.result;
             };
-            
             reader.readAsDataURL(file);
         }
     </script>
