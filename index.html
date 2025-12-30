@@ -3,44 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>身份证扫描转PDF</title>
+    <title>身份证高清扫描(带引导框)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        :root { --primary-color: #3b82f6; }
+        * { box-sizing: border-box; margin: 0; padding: 0; touch-action: manipulation; }
+        
         body {
             background-color: #f3f4f6;
-            font-family: -apple-system, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 20px 10px;
             min-height: 100vh;
+            padding-bottom: 80px; /* 留出底部按钮空间 */
         }
 
-        /* 标题栏 */
-        .header {
-            margin-bottom: 20px;
-            text-align: center;
-            color: #333;
-        }
-
-        /* A4 纸张容器 (预览区域) */
-        #pdf-content {
+        /* === 1. A4 预览区域 === */
+        .pdf-container {
+            margin-top: 20px;
             background: white;
-            width: 100%;
-            max-width: 595px; /* A4 宽度 72dpi */
-            aspect-ratio: 210/297; /* A4 比例 */
-            padding: 40px;
-            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            width: 95vw;
+            max-width: 595px; /* A4 宽度 */
+            aspect-ratio: 210/297;
+            padding: 30px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
             display: flex;
             flex-direction: column;
             justify-content: space-evenly;
             align-items: center;
-            position: relative;
         }
 
-        /* 扫描框样式 */
-        .scan-box {
+        .id-card-slot {
             width: 85.6%; /* 身份证标准比例 */
             height: 42%;
             border: 2px dashed #cbd5e1;
@@ -50,214 +44,290 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            overflow: hidden;
             position: relative;
+            overflow: hidden;
             cursor: pointer;
         }
 
-        /* 上传后的图片样式 */
-        .scan-box img {
+        .id-card-slot img {
             width: 100%;
             height: 100%;
             object-fit: contain;
             display: none;
         }
 
-        /* 提示文字 */
-        .tips {
-            text-align: center;
-            color: #94a3b8;
-            pointer-events: none;
-        }
-        .tips svg { width: 40px; height: 40px; margin-bottom: 10px; fill: #cbd5e1; }
+        .slot-tips { text-align: center; color: #94a3b8; pointer-events: none; }
+        .slot-tips h4 { margin-bottom: 5px; color: #64748b; }
+        .slot-tips p { font-size: 12px; }
 
-        /* 底部操作栏 */
-        .controls {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            background: white;
-            padding: 15px 20px;
-            box-shadow: 0 -4px 10px rgba(0,0,0,0.05);
-            display: flex;
-            gap: 15px;
-            z-index: 100;
-        }
-
-        .btn {
-            flex: 1;
-            height: 50px;
-            border: none;
-            border-radius: 25px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .btn-primary {
-            background-color: #3b82f6;
-            color: white;
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-        }
-        .btn-primary:active { transform: scale(0.98); }
-
-        .btn-reset {
-            background-color: #f1f5f9;
-            color: #475569;
-            flex: 0.4;
-        }
-
-        /* 加载动画 */
-        .loading-overlay {
+        /* === 2. 自定义相机界面 (全屏覆盖) === */
+        #camera-modal {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.7);
-            display: none;
+            background: #000;
+            z-index: 999;
+            display: none; /* 默认隐藏 */
             flex-direction: column;
+        }
+
+        /* 视频流 */
+        #camera-feed {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* 遮罩层 (实现中间亮四周暗) */
+        .camera-mask {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex;
             justify-content: center;
             align-items: center;
-            color: white;
-            z-index: 999;
+            pointer-events: none; /* 让点击穿透 */
         }
-        .spinner {
-            width: 40px; height: 40px;
-            border: 4px solid #fff;
-            border-top-color: transparent;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 15px;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* 为了生成的PDF美观，生成时隐藏边框 */
-        .generating .scan-box {
-            border: 1px solid #eee; /* 生成时只保留极细边框 */
-            background: white;
+        /* 引导框 */
+        .guide-box {
+            width: 80vw;
+            height: 50.4vw; /* 保持身份证比例 */
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            border-radius: 12px;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6); /* 巨大的阴影作为遮罩 */
+            position: relative;
         }
-        .generating .tips { display: none; }
+
+        /* 引导框四个角 */
+        .guide-box::after {
+            content: "请将证件放入框内";
+            position: absolute;
+            top: -40px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-size: 16px;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+        }
+
+        /* 相机控制栏 */
+        .camera-controls {
+            position: absolute;
+            bottom: 30px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 0 20px;
+        }
+
+        .cam-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            backdrop-filter: blur(5px);
+        }
+
+        .shutter-btn {
+            width: 70px; height: 70px;
+            background: white;
+            border-radius: 50%;
+            border: 4px solid rgba(200,200,200,0.5);
+            cursor: pointer;
+        }
+        .shutter-btn:active { transform: scale(0.9); background: #eee; }
+
+        /* === 3. 底部操作栏 === */
+        .main-controls {
+            position: fixed;
+            bottom: 20px;
+            width: 90%;
+            max-width: 400px;
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+        }
         
-        /* 隐藏input */
-        input[type="file"] { display: none; }
+        .action-btn {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 50px;
+            font-weight: bold;
+            font-size: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            cursor: pointer;
+        }
+        .btn-blue { background: var(--primary-color); color: white; }
+        .btn-white { background: white; color: #333; }
+
+        /* 生成PDF时的样式修正 */
+        .generating .id-card-slot { border: 1px solid #ddd; }
+        .generating .slot-tips { display: none; }
+        
+        /* 错误提示 */
+        #error-msg {
+            display: none;
+            position: fixed; top: 10px;
+            background: #ef4444; color: white;
+            padding: 10px 20px; border-radius: 8px; font-size: 12px;
+            z-index: 2000;
+        }
     </style>
 </head>
 <body>
 
-    <div class="header">
-        <h3>证件扫描复印件生成</h3>
-    </div>
+    <div id="error-msg">错误：无法启动相机。请确保使用HTTPS访问或已授权。</div>
 
-    <div id="pdf-content">
-        <div class="scan-box" onclick="document.getElementById('file-front').click()">
-            <div class="tips" id="tip-front">
-                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-2-5.5h4v2h-4v-2zm0-4h4v2h-4v-2zm0-4h4v2h-4v-2z"/></svg>
-                <p>点击上传人像面</p>
+    <h3 style="margin-top:20px; color:#333;">身份证扫描工具</h3>
+
+    <div class="pdf-container" id="pdf-content">
+        <div class="id-card-slot" onclick="openCamera('front')">
+            <div class="slot-tips" id="tip-front">
+                <h4>人像面</h4>
+                <p>点击开启相机扫描</p>
             </div>
-            <img id="img-front" />
+            <img id="img-front">
         </div>
-        <input type="file" id="file-front" accept="image/*" onchange="handleFile(this, 'front')">
 
-        <div class="scan-box" onclick="document.getElementById('file-back').click()">
-            <div class="tips" id="tip-back">
-                <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12zM12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z"/></svg>
-                <p>点击上传国徽面</p>
+        <div class="id-card-slot" onclick="openCamera('back')">
+            <div class="slot-tips" id="tip-back">
+                <h4>国徽面</h4>
+                <p>点击开启相机扫描</p>
             </div>
-            <img id="img-back" />
+            <img id="img-back">
         </div>
-        <input type="file" id="file-back" accept="image/*" onchange="handleFile(this, 'back')">
     </div>
 
-    <div style="height: 100px;"></div>
-
-    <div class="controls">
-        <button class="btn btn-reset" onclick="location.reload()">重置</button>
-        <button class="btn btn-primary" onclick="saveAsPDF()">保存 PDF 文件</button>
+    <div class="main-controls">
+        <button class="action-btn btn-white" onclick="location.reload()">重置</button>
+        <button class="action-btn btn-blue" onclick="generatePDF()">生成 PDF</button>
     </div>
 
-    <div class="loading-overlay" id="loading">
-        <div class="spinner"></div>
-        <p>正在生成 PDF...</p>
+    <div id="camera-modal">
+        <video id="camera-feed" autoplay playsinline muted></video>
+        
+        <div class="camera-mask">
+            <div class="guide-box"></div>
+        </div>
+
+        <div class="camera-controls">
+            <button class="cam-btn" onclick="closeCamera()">取消</button>
+            <button class="shutter-btn" onclick="takePhoto()"></button>
+            <button class="cam-btn" onclick="switchCameraMode()">切换镜头</button>
+        </div>
     </div>
 
     <script>
-        // 处理图片上传与压缩显示
-        function handleFile(input, side) {
-            const file = input.files[0];
-            if (!file) return;
+        let currentStream = null;
+        let currentSide = 'front';
+        let useFrontCamera = false; // 默认使用后置
+        
+        const video = document.getElementById('camera-feed');
+        const modal = document.getElementById('camera-modal');
+        const errorMsg = document.getElementById('error-msg');
 
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const img = new Image();
-                img.onload = function() {
-                    // 显示图片并隐藏提示
-                    const imgElem = document.getElementById('img-' + side);
-                    const tipElem = document.getElementById('tip-' + side);
-                    
-                    imgElem.src = resizeImage(img); // 使用压缩后的Base64
-                    imgElem.style.display = 'block';
-                    tipElem.style.display = 'none';
-                };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
+        // 1. 打开相机
+        async function openCamera(side) {
+            currentSide = side;
+            modal.style.display = 'flex';
+            errorMsg.style.display = 'none';
+            await startStream();
         }
 
-        // 简单的图片压缩逻辑 (防止生成PDF时内存溢出)
-        function resizeImage(img) {
-            const canvas = document.createElement('canvas');
-            const maxDim = 1200; // 限制最大长宽
-            let width = img.width;
-            let height = img.height;
-
-            if (width > height) {
-                if (width > maxDim) { height *= maxDim / width; width = maxDim; }
-            } else {
-                if (height > maxDim) { width *= maxDim / height; height = maxDim; }
+        // 2. 启动视频流
+        async function startStream() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
             }
 
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, width, height);
-            return canvas.toDataURL('image/jpeg', 0.8);
+            const constraints = {
+                video: {
+                    facingMode: useFrontCamera ? 'user' : 'environment', // environment 代表后置
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 }
+                },
+                audio: false
+            };
+
+            try {
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = currentStream;
+            } catch (err) {
+                console.error("相机启动失败:", err);
+                errorMsg.innerHTML = "相机启动失败：请检查浏览器权限，且必须使用HTTPS协议。";
+                errorMsg.style.display = 'block';
+            }
         }
 
-        // PDF 生成逻辑
-        function saveAsPDF() {
+        // 3. 拍照并截取
+        function takePhoto() {
+            if (!currentStream) return;
+
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            // 设置画布为视频的实际分辨率
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            // 绘制当前帧
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // 获取图片数据
+            const dataURL = canvas.toDataURL('image/jpeg', 0.9);
+
+            // 显示在主界面
+            const img = document.getElementById('img-' + currentSide);
+            const tip = document.getElementById('tip-' + currentSide);
+            img.src = dataURL;
+            img.style.display = 'block';
+            tip.style.display = 'none';
+
+            // 关闭相机
+            closeCamera();
+        }
+
+        // 4. 关闭相机
+        function closeCamera() {
+            modal.style.display = 'none';
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+                currentStream = null;
+            }
+        }
+
+        // 5. 切换前后置
+        function switchCameraMode() {
+            useFrontCamera = !useFrontCamera;
+            startStream();
+        }
+
+        // 6. 生成PDF
+        function generatePDF() {
             const element = document.getElementById('pdf-content');
-            const loading = document.getElementById('loading');
             
-            // 检查是否上传了图片
-            const frontSrc = document.getElementById('img-front').src;
-            const backSrc = document.getElementById('img-back').src;
-            if (!frontSrc && !backSrc) {
-                alert('请至少上传一张证件照片');
+            // 简单校验
+            if (!document.getElementById('img-front').src && !document.getElementById('img-back').src) {
+                alert("请先拍摄证件照");
                 return;
             }
 
-            loading.style.display = 'flex';
-            element.classList.add('generating'); // 添加样式去除虚线框
+            element.classList.add('generating'); // 去除虚线边框
 
             const opt = {
-                margin:       0,
-                filename:     '身份证复印件_' + new Date().getTime() + '.pdf',
-                image:        { type: 'jpeg', quality: 0.98 },
-                html2canvas:  { scale: 2, useCORS: true }, // 2倍缩放保证清晰度
-                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                margin: 0,
+                filename: '身份证扫描件.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
             };
 
-            // 生成 PDF
             html2pdf().set(opt).from(element).save().then(() => {
-                loading.style.display = 'none';
-                element.classList.remove('generating'); // 恢复原样
-            }).catch(err => {
-                console.error(err);
-                loading.style.display = 'none';
                 element.classList.remove('generating');
-                alert('生成失败，请重试');
             });
         }
     </script>
