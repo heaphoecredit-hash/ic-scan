@@ -3,316 +3,405 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>智能对齐扫描</title>
+    <title>专业证件扫描复印</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #f3f4f6; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+        * { margin: 0; padding: 0; box-sizing: border-box; touch-action: manipulation; }
+        body { 
+            background: #e5e5e5; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            min-height: 100vh; 
+            padding-bottom: 90px;
+        }
 
-        /* A4 预览纸 */
-        .preview-container {
+        /* === A4 纸张效果 === */
+        .paper-container {
             margin-top: 20px;
             background: white;
-            width: 90vw;
+            width: 95vw;
             max-width: 500px;
-            aspect-ratio: 210/297;
-            padding: 30px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            aspect-ratio: 210/297; /* A4 比例 */
+            padding: 40px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
             display: flex;
             flex-direction: column;
             gap: 30px;
             align-items: center;
-            justify-content: center;
+            /* 居中内容 */
+            justify-content: center; 
         }
 
-        /* 身份证卡槽 */
-        .card-slot {
+        /* 卡槽位 */
+        .scan-slot {
             width: 85.6mm;
             height: 54mm;
+            /* 响应式调整，防止手机太小溢出 */
             max-width: 100%;
-            aspect-ratio: 85.6/54;
-            border: 2px dashed #cbd5e1;
-            border-radius: 8px;
-            background: #f8fafc;
+            aspect-ratio: 85.6/54; 
+            
+            border: 2px dashed #bbb;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
             display: flex;
-            flex-direction: column;
             justify-content: center;
             align-items: center;
-            overflow: hidden;
-            position: relative;
-            cursor: pointer;
         }
-        
-        .card-slot img { width: 100%; height: 100%; object-fit: fill; display: none; }
-        .slot-tips { color: #94a3b8; text-align: center; pointer-events: none; }
 
-        /* 底部按钮 */
-        .controls {
+        .scan-slot img {
+            width: 100%;
+            height: 100%;
+            object-fit: fill; /* 强制填满，因为我们已经裁剪好了 */
+            display: none;
+            /* 默认给一点复印件滤镜效果，防止看起来太假 */
+            filter: contrast(1.1) brightness(1.05); 
+        }
+
+        .slot-placeholder {
+            text-align: center;
+            color: #888;
+            pointer-events: none;
+        }
+        .slot-placeholder h3 { font-size: 16px; margin-bottom: 5px; color: #555; }
+        .slot-placeholder p { font-size: 12px; }
+
+        /* === 底部操作栏 === */
+        .bottom-bar {
             position: fixed; bottom: 0; left: 0; width: 100%;
-            background: white; padding: 15px;
-            display: flex; gap: 15px;
+            background: white; padding: 15px 20px;
             box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
-            z-index: 10;
+            display: flex; gap: 15px; z-index: 50;
         }
-        .btn { flex: 1; padding: 12px; border-radius: 50px; border: none; font-weight: bold; font-size: 16px; }
-        .btn-blue { background: #2563eb; color: white; }
-        .btn-gray { background: #e5e7eb; color: #333; }
+        .btn { flex: 1; height: 50px; border-radius: 25px; border: none; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .btn-main { background: #007bff; color: white; }
+        .btn-sec { background: #f0f0f0; color: #333; }
 
-        /* === 全屏相机遮罩 === */
-        .camera-modal {
+        /* === 全屏相机遮罩 (重点修改) === */
+        .camera-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: black; z-index: 999;
-            display: none; flex-direction: column;
+            display: none; /* JS控制显示 */
+            justify-content: center;
+            align-items: center;
         }
 
-        /* 视频层 */
         video {
-            width: 100%; height: 100%;
-            object-fit: cover; /* 铺满屏幕 */
-        }
-
-        /* 引导框层 (覆盖在视频上) */
-        .overlay-layer {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none; /* 让点击穿透 */
-            display: flex; justify-content: center; align-items: center;
+            object-fit: cover;
         }
 
-        /* 核心逻辑：利用超大边框做遮罩 */
-        .guide-box {
-            width: 80vw;
-            /* 身份证比例 85.6 : 54 ≈ 1.585 */
-            height: calc(80vw / 1.585); 
-            border: 2px solid #00ff00; /* 绿色对齐框 */
-            border-radius: 8px;
-            box-shadow: 0 0 0 100vh rgba(0, 0, 0, 0.7); /* 关键：四周变黑 */
-            position: relative;
+        /* 黑色遮罩层 - 使用SVG路径裁剪，确保中间完全透明，四周完全不透明 */
+        .mask-svg {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10;
+            pointer-events: none;
         }
-        
+
+        /* 引导文字 */
         .guide-text {
-            position: absolute; top: -40px; width: 100%;
-            text-align: center; color: white; font-size: 14px;
-            text-shadow: 1px 1px 2px black;
+            position: absolute; top: 10%; width: 100%;
+            text-align: center; color: white; font-size: 16px; 
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+            z-index: 20; pointer-events: none;
+        }
+
+        /* 滤镜开关 */
+        .filter-switch {
+            position: absolute; top: 15%; z-index: 30;
+            background: rgba(0,0,0,0.5); padding: 8px 15px;
+            border-radius: 20px; color: white; font-size: 14px;
+            display: flex; align-items: center; gap: 8px;
+            cursor: pointer; border: 1px solid rgba(255,255,255,0.3);
         }
 
         /* 拍照按钮区 */
-        .camera-actions {
-            position: absolute; bottom: 30px; left: 0; width: 100%;
-            display: flex; justify-content: center; align-items: center;
-            gap: 40px; z-index: 1001;
+        .cam-actions {
+            position: absolute; bottom: 50px; width: 100%;
+            display: flex; justify-content: space-around; align-items: center;
+            z-index: 20;
         }
-        
-        .shutter {
-            width: 70px; height: 70px; border-radius: 50%;
-            background: white; border: 5px solid rgba(255,255,255,0.3);
+        .shutter-btn {
+            width: 76px; height: 76px; background: white; border-radius: 50%;
+            border: 6px solid rgba(200,200,200,0.4);
             cursor: pointer;
         }
-        .shutter:active { transform: scale(0.9); }
-        
-        .close-cam { color: white; background: rgba(0,0,0,0.5); padding: 8px 16px; border-radius: 20px; border:none;}
-
-        /* 生成时样式 */
-        .generating .card-slot { border: 1px solid #ddd; }
-        .generating .slot-tips { display: none; }
-        
-        #error-msg {
-            position: fixed; top: 10px; left: 10px; right: 10px;
-            background: #ef4444; color: white; padding: 10px;
-            border-radius: 8px; font-size: 12px; display: none; z-index: 2000;
+        .shutter-btn:active { transform: scale(0.95); background: #ddd; }
+        .close-btn {
+            color: white; background: transparent; border: none; font-size: 16px; padding: 10px;
         }
+
+        /* 生成中的状态 */
+        .generating .scan-slot { border: 1px solid #eee; background: white; }
+        .generating .slot-placeholder { display: none; }
     </style>
 </head>
 <body>
 
-    <div id="error-msg"></div>
-
-    <div class="preview-container" id="pdf-area">
-        <div class="card-slot" onclick="startCamera('front')">
-            <div class="slot-tips" id="tip-front">
-                <h3>+ 拍摄人像面</h3>
-                <p>请对齐绿色边框拍摄</p>
+    <div class="paper-container" id="pdf-area">
+        <div class="scan-slot" onclick="startScan('front')">
+            <div class="slot-placeholder" id="ph-front">
+                <h3>+ 身份证人像面</h3>
+                <p>点击拍摄 (自带美化)</p>
             </div>
             <img id="img-front">
         </div>
 
-        <div class="card-slot" onclick="startCamera('back')">
-            <div class="slot-tips" id="tip-back">
-                <h3>+ 拍摄国徽面</h3>
-                <p>请对齐绿色边框拍摄</p>
+        <div class="scan-slot" onclick="startScan('back')">
+            <div class="slot-placeholder" id="ph-back">
+                <h3>+ 身份证国徽面</h3>
+                <p>点击拍摄 (自带美化)</p>
             </div>
             <img id="img-back">
         </div>
     </div>
 
-    <div class="controls">
-        <button class="btn btn-gray" onclick="location.reload()">清空</button>
-        <button class="btn btn-blue" onclick="makePDF()">生成 PDF</button>
+    <div class="bottom-bar">
+        <button class="btn btn-sec" onclick="location.reload()">清空重置</button>
+        <button class="btn btn-main" onclick="makePDF()">生成复印件 PDF</button>
     </div>
 
-    <div class="camera-modal" id="cam-modal">
+    <div class="camera-overlay" id="cam-modal">
         <video id="video" autoplay playsinline muted></video>
         
-        <div class="overlay-layer">
-            <div class="guide-box" id="guide-box">
-                <div class="guide-text">将证件边缘对齐绿框</div>
-            </div>
-        </div>
+        <svg class="mask-svg" width="100%" height="100%">
+            <defs>
+                <mask id="mask-layer">
+                    <rect x="0" y="0" width="100%" height="100%" fill="white" />
+                    <rect id="cutout-rect" x="10%" y="30%" width="80%" height="30%" fill="black" rx="10" ry="10" />
+                </mask>
+            </defs>
+            <rect x="0" y="0" width="100%" height="100%" fill="rgba(0,0,0,0.85)" mask="url(#mask-layer)" />
+            <rect id="border-rect" x="10%" y="30%" width="80%" height="30%" fill="transparent" stroke="#00ff00" stroke-width="2" rx="10" ry="10" />
+        </svg>
 
-        <div class="camera-actions">
-            <button class="close-cam" onclick="stopCamera()">取消</button>
-            <button class="shutter" onclick="takePhoto()"></button>
+        <div class="guide-text">请移动手机，让证件<br><b>完全填满</b>绿色亮框</div>
+
+        <label class="filter-switch">
+            <input type="checkbox" id="bw-mode" checked> 黑白复印模式
+        </label>
+
+        <div class="cam-actions">
+            <button class="close-btn" onclick="closeCam()">取消</button>
+            <button class="shutter-btn" onclick="takePhoto()"></button>
+            <button class="close-btn" onclick="switchCam()">切换镜头</button>
         </div>
     </div>
 
     <script>
         let currentStream = null;
         let currentSide = '';
+        let videoDevices = [];
+        let devIndex = 0;
+        
         const video = document.getElementById('video');
         const modal = document.getElementById('cam-modal');
-        const guideBox = document.getElementById('guide-box');
+        const cutout = document.getElementById('cutout-rect');
+        const border = document.getElementById('border-rect');
+
+        // 初始化设备列表
+        async function initDev() {
+            if(navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+                const devs = await navigator.mediaDevices.enumerateDevices();
+                videoDevices = devs.filter(d => d.kind === 'videoinput');
+                // 找后置
+                const back = videoDevices.findIndex(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('environment'));
+                if(back !== -1) devIndex = back;
+            }
+        }
+        initDev();
+
+        // 调整遮罩大小（核心逻辑：始终保持身份证比例）
+        function adjustMask() {
+            const screenW = window.innerWidth;
+            const screenH = window.innerHeight;
+            
+            // 设定扫描框宽度为屏幕的 85%
+            const boxW = screenW * 0.85;
+            // 身份证比例 85.6 : 54 ≈ 1.585
+            const boxH = boxW / 1.585;
+            
+            const x = (screenW - boxW) / 2;
+            const y = (screenH - boxH) / 2 - 50; // 稍微往上提一点，符合视觉习惯
+
+            // 更新 SVG 形状
+            cutout.setAttribute('x', x);
+            cutout.setAttribute('y', y);
+            cutout.setAttribute('width', boxW);
+            cutout.setAttribute('height', boxH);
+            
+            border.setAttribute('x', x);
+            border.setAttribute('y', y);
+            border.setAttribute('width', boxW);
+            border.setAttribute('height', boxH);
+
+            return { x, y, w: boxW, h: boxH }; // 返回实际像素位置
+        }
 
         // 启动相机
-        async function startCamera(side) {
+        async function startScan(side) {
             currentSide = side;
-            document.getElementById('error-msg').style.display = 'none';
+            adjustMask(); // 计算位置
+            modal.style.display = 'flex';
+            
+            const constraints = {
+                audio: false,
+                video: {
+                    deviceId: videoDevices.length ? { exact: videoDevices[devIndex].deviceId } : undefined,
+                    facingMode: videoDevices.length ? undefined : 'environment',
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 }
+                }
+            };
             
             try {
-                // 强制使用后置摄像头
-                const constraints = { 
-                    video: { 
-                        facingMode: { exact: "environment" },
-                        width: { ideal: 1920 }, // 尽可能高清
-                        height: { ideal: 1080 }
-                    } 
-                };
-                // 如果不支持 environment (如PC)，退回默认
-                try {
-                    currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-                } catch (e) {
-                    currentStream = await navigator.mediaDevices.getUserMedia({ video: true });
-                }
-
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = currentStream;
-                modal.style.display = 'flex';
-                video.play();
-            } catch (err) {
-                console.error(err);
-                showError("无法启动相机。请确保网站使用HTTPS协议，并允许相机权限。");
+            } catch(e) {
+                alert("无法启动相机，请确保使用HTTPS访问或允许权限");
+                console.error(e);
             }
         }
 
-        function stopCamera() {
+        function closeCam() {
             modal.style.display = 'none';
-            if (currentStream) {
+            if(currentStream) {
                 currentStream.getTracks().forEach(t => t.stop());
+                currentStream = null;
+            }
+        }
+        
+        function switchCam() {
+            if(videoDevices.length > 1) {
+                devIndex = (devIndex + 1) % videoDevices.length;
+                startScan(currentSide); // 重启
             }
         }
 
-        function showError(msg) {
-            const el = document.getElementById('error-msg');
-            el.innerText = msg;
-            el.style.display = 'block';
-        }
-
-        // === 核心逻辑：智能裁剪 ===
+        // 核心：拍照与精确裁剪
         function takePhoto() {
-            if (!currentStream) return;
+            if(!currentStream) return;
 
-            // 1. 创建画布
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-
-            // 2. 获取实际视频分辨率
-            const vidW = video.videoWidth;
-            const vidH = video.videoHeight;
             
-            // 3. 获取屏幕上视频和框的位置信息
-            // 视频在屏幕上的实际渲染尺寸（object-fit: cover 后的尺寸）
-            // 我们需要计算视频被缩放了多少，以及偏移了多少
-            const rect = video.getBoundingClientRect(); // 视频元素的屏幕尺寸
-            const guide = guideBox.getBoundingClientRect(); // 绿框的屏幕尺寸
-
-            // 4. 计算比例
-            // video标签是 cover 模式，计算视频画面相比于源文件的缩放比例
-            // 注意：object-fit: cover 会裁剪视频。我们需要知道哪部分显示在屏幕上。
+            // 1. 获取视频源的实际分辨率
+            const vW = video.videoWidth;
+            const vH = video.videoHeight;
             
-            // 简单算法：基于中心点裁剪。
-            // 假设用户把证件放在了屏幕正中间的框里。
+            // 2. 获取屏幕上视频的显示尺寸（CSS object-fit: cover 的结果）
+            const screenW = window.innerWidth;
+            const screenH = window.innerHeight;
             
-            // 计算屏幕上绿框中心相对于视频元素中心的偏移（通常是0，因为都是居中）
-            // 计算绿框在视频源分辨率下的对应尺寸
+            // 计算渲染比例
+            const videoRatio = vW / vH;
+            const screenRatio = screenW / screenH;
             
-            // 视频源宽高比
-            const vidRatio = vidW / vidH;
-            // 屏幕元素宽高比
-            const screenRatio = rect.width / rect.height;
+            let renderW, renderH;
             
-            let renderW, renderH, offsetX, offsetY;
-
-            // 模拟 object-fit: cover 的计算逻辑
-            if (screenRatio > vidRatio) {
-                // 屏幕更宽，视频宽度适配屏幕，高度被裁剪
-                renderW = rect.width;
-                renderH = rect.width / vidRatio;
+            // 模拟 object-fit: cover 的算法
+            if (screenRatio > videoRatio) {
+                // 屏幕更宽，宽度对齐，高度被裁
+                renderW = screenW;
+                renderH = screenW / videoRatio;
             } else {
-                // 屏幕更高，视频高度适配屏幕，宽度被裁剪
-                renderH = rect.height;
-                renderW = rect.height * vidRatio;
+                // 屏幕更高，高度对齐，宽度被裁
+                renderH = screenH;
+                renderW = screenH * videoRatio;
             }
             
-            // 视频源到屏幕渲染的缩放倍率 (实际像素 / 渲染像素)
-            // 既然我们要从源头上截取，我们需要把屏幕坐标映射回源坐标
-            const scale = vidW / renderW; // 或者 vidH / renderH，是一样的
-
-            // 绿框在渲染视频中的位置（相对于视频中心）
-            // 视频渲染区域的左上角相对于屏幕左上角的坐标
-            const vidRenderLeft = (rect.width - renderW) / 2;
-            const vidRenderTop = (rect.height - renderH) / 2;
-
-            // 绿框相对于渲染视频左上角的坐标
-            const guideRelLeft = guide.left - vidRenderLeft;
-            const guideRelTop = guide.top - vidRenderTop;
-
-            // 映射回视频源文件的坐标 (Source X, Y, W, H)
-            const sX = Math.max(0, guideRelLeft * scale);
-            const sY = Math.max(0, guideRelTop * scale);
-            const sW = guide.width * scale;
-            const sH = guide.height * scale;
-
-            // 设置画布大小为裁剪后的大小
-            canvas.width = sW;
-            canvas.height = sH;
-
-            // 5. 执行裁剪绘制
-            ctx.drawImage(video, sX, sY, sW, sH, 0, 0, sW, sH);
-
-            // 6. 导出图片
-            const imgData = canvas.toDataURL('image/jpeg', 0.95);
+            // 3. 获取遮罩框在屏幕上的位置
+            const mask = adjustMask(); // {x, y, w, h}
             
+            // 4. 计算遮罩框在“渲染后的视频”中的相对位置
+            // 视频是居中显示的
+            const offsetX = (renderW - screenW) / 2;
+            const offsetY = (renderH - screenH) / 2;
+            
+            // 框相对于视频左上角的坐标
+            const boxX_in_Render = mask.x + offsetX;
+            const boxY_in_Render = mask.y + offsetY;
+            
+            // 5. 映射回视频源分辨率 (Source Coordinates)
+            const scale = vW / renderW; // 缩放因子
+            
+            const sX = boxX_in_Render * scale;
+            const sY = boxY_in_Render * scale;
+            const sW = mask.w * scale;
+            const sH = mask.h * scale;
+            
+            // 设置画布为身份证比例的高清尺寸
+            canvas.width = 1000; 
+            canvas.height = 1000 / 1.585;
+
+            // 绘制裁剪部分
+            ctx.drawImage(video, sX, sY, sW, sH, 0, 0, canvas.width, canvas.height);
+
+            // === 图像处理（复印件滤镜） ===
+            if(document.getElementById('bw-mode').checked) {
+                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = imgData.data;
+                
+                // 简单阈值化 + 对比度增强
+                for (let i = 0; i < data.length; i += 4) {
+                    const r = data[i];
+                    const g = data[i + 1];
+                    const b = data[i + 2];
+                    
+                    // 转灰度
+                    let gray = 0.299 * r + 0.587 * g + 0.114 * b;
+                    
+                    // 增加对比度 (类似于复印机的色阶调整)
+                    // 如果比较亮（背景），就变纯白；如果比较暗（文字），就变深
+                    if (gray > 140) { // 背景阈值
+                        gray = 255;
+                    } else { 
+                        gray = gray * 0.8; // 文字加深
+                    }
+                    
+                    data[i] = gray;
+                    data[i + 1] = gray;
+                    data[i + 2] = gray;
+                }
+                ctx.putImageData(imgData, 0, 0);
+            }
+
+            // 显示
             const img = document.getElementById('img-' + currentSide);
-            const tip = document.getElementById('tip-' + currentSide);
+            const ph = document.getElementById('ph-' + currentSide);
             
-            img.src = imgData;
+            img.src = canvas.toDataURL('image/jpeg', 0.9);
             img.style.display = 'block';
-            tip.style.display = 'none';
-
-            stopCamera();
+            ph.style.display = 'none';
+            
+            closeCam();
         }
 
         function makePDF() {
             const el = document.getElementById('pdf-area');
-             if (!document.getElementById('img-front').src && !document.getElementById('img-back').src) {
-                alert("请先拍照"); return;
+            if(!document.getElementById('img-front').src && !document.getElementById('img-back').src) {
+                alert("请先拍摄"); return;
             }
+            
             el.classList.add('generating');
+            
             html2pdf().set({
                 margin: 0,
-                filename: '身份证扫描.pdf',
+                filename: '身份证扫描件.pdf',
                 image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true },
+                html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-            }).from(el).save().then(() => el.classList.remove('generating'));
+            }).from(el).save().then(() => {
+                el.classList.remove('generating');
+            });
         }
+        
+        // 窗口大小改变时重绘遮罩
+        window.onresize = adjustMask;
     </script>
 </body>
 </html>
