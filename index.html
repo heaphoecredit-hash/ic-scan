@@ -1,188 +1,287 @@
 <!doctype html>
 <html lang="zh-Hans">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>IC 正反面 A4（防抖版）</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>IC 正反面一页（iPhone兼容/证件裁切版）</title>
+  <style>
+    :root{
+      --bg:#0b0b0f; --card:#12121a; --line:#232336; --txt:#fff; --muted:#a8a8b8;
+      --accent:#00d084; --danger:#ff5b5b;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    .wrap{max-width:980px;margin:0 auto;padding:14px 14px 28px}
+    .top{position:sticky;top:0;z-index:10;padding:10px 12px;background:rgba(11,11,15,.85);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:14px}
+    .title{font-weight:700}
+    .sub{color:var(--muted);font-size:12px;margin-top:6px;line-height:1.4}
+    .row{display:grid;grid-template-columns:1.2fr .8fr;gap:14px;margin-top:14px}
+    @media (max-width:860px){.row{grid-template-columns:1fr;}}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+    .card-h{padding:10px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .pill{display:inline-flex;align-items:center;gap:8px;padding:7px 10px;border-radius:999px;background:#0f2c24;border:1px solid #1e6d57;color:#bfffe8;font-size:12px}
+    .pill.bad{background:#2b1111;border-color:#7b2a2a;color:#ffd1d1}
+    .cam{position:relative;aspect-ratio:4/3;background:#000}
+    video{width:100%;height:100%;object-fit:cover;display:block}
 
-<style>
-:root{
-  --bg:#0b0b0f; --card:#12121a; --txt:#fff;
-  --accent:#00d084; --warn:#ffb020; --bad:#ff4d4f;
-}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--txt);
-font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    .roi{
+      position:absolute; left:10%; top:18%; width:80%; height:54%;
+      border:3px solid var(--accent); border-radius:14px;
+      box-shadow:0 0 0 9999px rgba(0,0,0,.35) inset;
+      pointer-events:none;
+    }
 
-.top{position:sticky;top:0;z-index:10;padding:10px 12px;background:rgba(11,11,15,.9)}
-button{padding:12px 14px;border-radius:14px;border:none;font-size:15px;font-weight:700}
-.primary{background:var(--accent);color:#00120a}
-.ghost{background:#2a2a36;color:#fff}
-button:disabled{opacity:.5}
+    .controls{padding:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+    button{
+      appearance:none;border:0;border-radius:12px;padding:12px 14px;
+      background:#0d3b2f;color:#eafff8;font-weight:700;cursor:pointer
+    }
+    button[disabled]{opacity:.45;cursor:not-allowed}
+    .ghost{background:transparent;border:1px solid var(--line);color:var(--txt);font-weight:600}
+    .thumbs{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px}
+    .thumb{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#0a0a0f}
+    .thumb img{width:100%;height:160px;object-fit:cover;display:block}
+    .thumb .cap{padding:8px 10px;color:var(--muted);font-size:12px;border-top:1px solid var(--line)}
+    .print-card{padding:12px}
+    .hint{color:var(--muted);font-size:12px;line-height:1.4}
 
-.viewer{position:relative}
-video{width:100%;height:65vh;object-fit:cover;background:#000}
-
-.frame{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
-.frameBox{
-  width:86vw;max-width:420px;aspect-ratio:85.6/54;
-  border:3px solid var(--accent);border-radius:14px;
-  box-shadow:0 0 0 9999px rgba(0,0,0,.45)
-}
-
-/* 防抖提示 */
-.hint{
-  position:absolute;bottom:14px;left:50%;transform:translateX(-50%);
-  padding:8px 14px;border-radius:999px;font-weight:700;font-size:14px;
-  background:#222;color:#fff
-}
-.hint.ok{background:var(--accent);color:#00120a}
-.hint.warn{background:var(--warn);color:#000}
-.hint.bad{background:var(--bad)}
-
-.controls{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px}
-.preview{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px}
-.preview img{width:100%;height:160px;object-fit:contain;background:#fff;border-radius:12px}
-
-/* A4 */
-.page{width:210mm;min-height:297mm;background:#fff;color:#000;margin:0 auto;padding:12mm}
-.pBox{height:120mm;border:1px solid #999;border-radius:10px;
-display:flex;align-items:center;justify-content:center;margin-bottom:8mm}
-.pBox img{max-width:100%;max-height:108mm;object-fit:contain}
-
-@media print{
-  body{background:#fff}
-  .top,.viewer,.controls,.preview{display:none}
-  @page{size:A4;margin:0}
-}
-</style>
+    @media print{
+      body{background:#fff;color:#000}
+      .top,.controls,.hint,.sub,.title,.row{display:none !important}
+      .printOnly{display:block !important}
+    }
+    .printOnly{display:none}
+    .a4{width:210mm;height:297mm;background:#fff;margin:0 auto;padding:12mm 10mm;}
+    .a4 h2{margin:0 0 10mm 0;font-size:16px;font-weight:700}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8mm}
+    .slot{border:0;display:flex;flex-direction:column;gap:6mm}
+    .slot img{width:100%;height:80mm;object-fit:contain;background:#fff;}
+    .label{font-size:12px;color:#333}
+  </style>
 </head>
-
 <body>
+  <div class="wrap">
+    <div class="top">
+      <div class="title">IC 正反面一页（iPhone兼容：只拍证件本体）</div>
+      <div class="sub">
+        iPhone 请用 <b>Safari</b> 打开（微信/FB/IG 内置浏览器可能不支持相机）。
+        拍照只保存绿色框内内容，打印 A4 竖版。
+      </div>
+    </div>
 
-<div class="top">
-  <button id="start" class="primary">开启相机</button>
-  <button id="print" class="ghost" disabled>保存 PDF</button>
-</div>
+    <div class="row">
+      <div class="card">
+        <div class="card-h">
+          <div id="status" class="pill bad">未启动相机</div>
+          <button id="startBtn" class="ghost">启动相机</button>
+        </div>
 
-<div class="viewer">
-  <video id="video" autoplay playsinline muted></video>
-  <div class="frame"><div class="frameBox"></div></div>
-  <div id="hint" class="hint warn">请放稳手机</div>
-</div>
+        <div class="cam">
+          <video id="video"></video>
+          <div class="roi" id="roi"></div>
+        </div>
 
-<div class="controls">
-  <button id="front" class="primary" disabled>拍 IC 正面</button>
-  <button id="back"  class="primary" disabled>拍 IC 反面</button>
-</div>
+        <div class="controls">
+          <button id="frontBtn" disabled>拍 IC 正面</button>
+          <button id="backBtn" disabled>拍 IC 反面</button>
+          <button id="resetBtn" class="ghost">重拍/清除</button>
+          <button id="printBtn" disabled>打印 / 存为 PDF</button>
+          <div class="hint" style="flex:1;min-width:240px">
+            顺序：启动相机 → 把 IC 放进绿色框 → 拍正面/反面 → 打印为 PDF（A4）。
+          </div>
+        </div>
 
-<div class="preview">
-  <img id="imgFront">
-  <img id="imgBack">
-</div>
+        <div class="thumbs">
+          <div class="thumb">
+            <img id="imgFront" alt="front preview" />
+            <div class="cap">正面（只保留框内）</div>
+          </div>
+          <div class="thumb">
+            <img id="imgBack" alt="back preview" />
+            <div class="cap">反面（只保留框内）</div>
+          </div>
+        </div>
+      </div>
 
-<div class="page">
-  <div class="pBox"><img id="printFront"></div>
-  <div class="pBox"><img id="printBack"></div>
-</div>
-
-<canvas id="canvas" hidden></canvas>
+      <div class="card">
+        <div class="card-h">
+          <div style="font-weight:700">打印预览</div>
+          <div class="hint">（打印时只会输出下面 A4）</div>
+        </div>
+        <div class="print-card">
+          <div class="printOnly" id="printArea">
+            <div class="a4">
+              <h2>IC（正反面）一页</h2>
+              <div class="grid2">
+                <div class="slot">
+                  <div class="label">正面</div>
+                  <img id="printFront" />
+                </div>
+                <div class="slot">
+                  <div class="label">反面</div>
+                  <img id="printBack" />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="hint">若你要“打印时完全无标题字”，我可以再给一版。</div>
+        </div>
+      </div>
+    </div>
+  </div>
 
 <script>
-const video = document.getElementById('video');
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
+(() => {
+  const video = document.getElementById('video');
+  const roiEl = document.getElementById('roi');
+  const status = document.getElementById('status');
 
-const startBtn = document.getElementById('start');
-const frontBtn = document.getElementById('front');
-const backBtn  = document.getElementById('back');
-const printBtn = document.getElementById('print');
-const hint = document.getElementById('hint');
+  const startBtn = document.getElementById('startBtn');
+  const frontBtn = document.getElementById('frontBtn');
+  const backBtn  = document.getElementById('backBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const printBtn = document.getElementById('printBtn');
 
-const imgFront = document.getElementById('imgFront');
-const imgBack  = document.getElementById('imgBack');
-const printFront = document.getElementById('printFront');
-const printBack  = document.getElementById('printBack');
+  const imgFront = document.getElementById('imgFront');
+  const imgBack  = document.getElementById('imgBack');
+  const printFront = document.getElementById('printFront');
+  const printBack  = document.getElementById('printBack');
 
-const IC_RATIO = 85.6 / 54;
+  let stream = null;
+  let locked = false;
+  const LOCK_MS = 600;
 
-// ===== 相机 =====
-startBtn.onclick = async ()=>{
-  const s = await navigator.mediaDevices.getUserMedia({
-    video:{facingMode:{ideal:'environment'}},audio:false
-  });
-  video.srcObject = s;
-  startMotion();
-};
-
-// ===== 防抖 =====
-let lastMove = Date.now();
-let stable = false;
-
-function startMotion(){
-  if(!window.DeviceMotionEvent){
-    stable = true; enableShoot(); return;
+  function setStatus(ok, text){
+    status.className = 'pill' + (ok ? '' : ' bad');
+    status.textContent = text;
   }
-  window.addEventListener('devicemotion', e=>{
-    const a = e.accelerationIncludingGravity;
-    if(!a) return;
-    const mag = Math.abs(a.x)+Math.abs(a.y)+Math.abs(a.z);
-    if(mag > 25){ // 晃动阈值
-      lastMove = Date.now();
-      stable = false;
-      disableShoot("请放稳手机");
+  function lock(){ locked = true; setTimeout(() => locked = false, LOCK_MS); }
+
+  function isSecure(){
+    return window.isSecureContext || location.protocol === 'https:' || location.hostname === 'localhost';
+  }
+
+  async function startCamera(){
+    try{
+      if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+        setStatus(false,'此浏览器不支持相机（请用 iPhone Safari / Chrome 最新版）');
+        return;
+      }
+      if(!isSecure()){
+        setStatus(false,'必须在 HTTPS 下使用相机（请用 GitHub Pages 的 https 链接）');
+        return;
+      }
+      if(stream) return;
+
+      // iOS Safari：必须 playsinline + muted + 用户点击触发
+      video.setAttribute('playsinline','');
+      video.setAttribute('webkit-playsinline','');
+      video.muted = true;
+      video.autoplay = true;
+
+      setStatus(false,'请求相机权限中…');
+
+      // 先尝试后摄 + 高清，失败再降级到 video:true
+      const primary = {
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1920 },
+          height:{ ideal: 1080 }
+        },
+        audio: false
+      };
+
+      try{
+        stream = await navigator.mediaDevices.getUserMedia(primary);
+      }catch(e1){
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
+
+      video.srcObject = stream;
+
+      // iOS 可能需要显式 play
+      await video.play();
+
+      setStatus(true,'相机已启动：把 IC 放进绿色框');
+      frontBtn.disabled = false;
+      backBtn.disabled = false;
+
+    }catch(err){
+      const name = err && err.name ? err.name : 'Error';
+      let msg = name;
+
+      // iOS 常见报错提示
+      if(name === 'NotAllowedError') msg = '未允许相机权限（Safari 设置里允许相机）';
+      if(name === 'NotFoundError') msg = '找不到相机（设备无相机或被占用）';
+      if(name === 'NotReadableError') msg = '相机被占用（关掉其它占用相机的 App）';
+
+      setStatus(false,'无法启动相机：' + msg + '（如在微信/FB内打开，请改用Safari）');
+      console.error(err);
     }
+  }
+
+  function captureROI(){
+    const vw = video.videoWidth, vh = video.videoHeight;
+    if(!vw || !vh) throw new Error('Video not ready');
+
+    const vRect = video.getBoundingClientRect();
+    const rRect = roiEl.getBoundingClientRect();
+
+    const scaleX = vw / vRect.width;
+    const scaleY = vh / vRect.height;
+
+    let sx = (rRect.left - vRect.left) * scaleX;
+    let sy = (rRect.top  - vRect.top ) * scaleY;
+    let sw = rRect.width  * scaleX;
+    let sh = rRect.height * scaleY;
+
+    sx = Math.max(0, Math.min(vw-1, sx));
+    sy = Math.max(0, Math.min(vh-1, sy));
+    sw = Math.max(1, Math.min(vw - sx, sw));
+    sh = Math.max(1, Math.min(vh - sy, sh));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(sw);
+    canvas.height = Math.round(sh);
+    const ctx = canvas.getContext('2d');
+
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.92);
+  }
+
+  function updatePrintState(){
+    const ok = !!(printFront.src && printBack.src);
+    printBtn.disabled = !ok;
+  }
+
+  startBtn.addEventListener('click', startCamera);
+
+  frontBtn.addEventListener('click', () => {
+    if(locked) return; lock();
+    const img = captureROI();
+    imgFront.src = img;
+    printFront.src = img;
+    updatePrintState();
   });
 
-  setInterval(()=>{
-    if(Date.now()-lastMove > 600){
-      stable = true;
-      enableShoot();
-    }
-  },200);
-}
+  backBtn.addEventListener('click', () => {
+    if(locked) return; lock();
+    const img = captureROI();
+    imgBack.src = img;
+    printBack.src = img;
+    updatePrintState();
+  });
 
-function enableShoot(){
-  frontBtn.disabled = false;
-  backBtn.disabled = false;
-  hint.textContent = "稳定，可拍照";
-  hint.className = "hint ok";
-}
-function disableShoot(text){
-  frontBtn.disabled = true;
-  backBtn.disabled = true;
-  hint.textContent = text;
-  hint.className = "hint warn";
-}
+  resetBtn.addEventListener('click', () => {
+    imgFront.removeAttribute('src');
+    imgBack.removeAttribute('src');
+    printFront.removeAttribute('src');
+    printBack.removeAttribute('src');
+    updatePrintState();
+  });
 
-// ===== 拍 IC =====
-function captureIC(){
-  const vw = video.videoWidth, vh = video.videoHeight;
-  let cw = vw, ch = cw / IC_RATIO;
-  if(ch > vh){ ch = vh; cw = ch * IC_RATIO; }
-  const sx = (vw-cw)/2, sy = (vh-ch)/2;
-  const outW = 1400, outH = outW / IC_RATIO;
-  canvas.width = outW; canvas.height = outH;
-  ctx.drawImage(video,sx,sy,cw,ch,0,0,outW,outH);
-  return canvas.toDataURL('image/jpeg',0.92);
-}
-
-frontBtn.onclick = ()=>{
-  if(!stable) return;
-  const img = captureIC();
-  imgFront.src = img; printFront.src = img; check();
-};
-backBtn.onclick = ()=>{
-  if(!stable) return;
-  const img = captureIC();
-  imgBack.src = img; printBack.src = img; check();
-};
-
-function check(){
-  if(printFront.src && printBack.src) printBtn.disabled = false;
-}
-printBtn.onclick = ()=>window.print();
+  printBtn.addEventListener('click', () => window.print());
+})();
 </script>
-
 </body>
 </html>
