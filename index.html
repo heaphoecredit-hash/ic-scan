@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>身份证高清扫描 (全兼容版)</title>
+    <title>身份证扫描 (双保险版)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
@@ -13,269 +13,306 @@
             display: flex; flex-direction: column;
         }
 
+        /* 顶部提示 */
         .header {
-            height: 44px; background: #000; z-index: 10;
+            height: 44px; background: #111; z-index: 10;
             display: flex; justify-content: space-between; align-items: center;
-            padding: 0 15px; font-size: 16px; font-weight: 600;
+            padding: 0 15px; font-size: 14px; border-bottom: 1px solid #333;
         }
-        /* 切换摄像头按钮 */
-        .switch-cam {
-            font-size: 14px; padding: 5px 10px; background: #333; 
-            border-radius: 4px; border: 1px solid #555; color: #fff;
+        .btn-switch {
+            padding: 5px 12px; background: #333; border: 1px solid #555;
+            border-radius: 4px; font-size: 12px; color: #fff;
         }
 
-        .camera-viewport {
-            position: relative; flex: 1; background: #111;
+        /* 主视图区域 */
+        .viewport {
+            position: relative; flex: 1; background: #000;
             display: flex; justify-content: center; align-items: center; overflow: hidden;
         }
+        
+        /* 1. WebRTC 视频流 */
         video { width: 100%; height: 100%; object-fit: cover; }
 
-        .scan-guide {
+        /* 2. 备用方案：文件上传隐形按钮 */
+        .fallback-input {
+            display: none; /* 默认隐藏，WebRTC失败时才启用 */
+        }
+
+        /* 绿框引导 */
+        .guide-box {
             position: absolute;
             width: 85%; aspect-ratio: 1.58 / 1;
-            border: 2px solid #2ecc71;
-            border-radius: 6px;
+            border: 2px solid #0f0; border-radius: 6px;
             box-shadow: 0 0 0 100vmax rgba(0,0,0,0.5);
             pointer-events: none; z-index: 5;
         }
-        .guide-label {
+        .guide-text {
             position: absolute; width: 100%; text-align: center;
-            bottom: -35px; font-size: 15px; color: #fff;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+            bottom: -35px; color: #fff; text-shadow: 0 1px 2px #000;
         }
 
+        /* 错误/备用 提示层 */
+        #error-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #111; z-index: 20;
+            display: none; /* 默认隐藏 */
+            flex-direction: column; justify-content: center; align-items: center;
+            padding: 30px; text-align: center;
+        }
+        .err-btn {
+            margin-top: 20px; padding: 15px 30px;
+            background: #007aff; color: #fff; font-size: 18px; font-weight: bold;
+            border: none; border-radius: 50px;
+            box-shadow: 0 4px 15px rgba(0,122,255,0.4);
+        }
+
+        /* 底部控制栏 */
         .controls {
-            height: 140px; background: #000;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            z-index: 10;
+            height: 140px; background: #000; z-index: 10;
+            display: flex; justify-content: center; align-items: center;
         }
-        
-        .shutter-btn {
-            width: 76px; height: 76px; border: 4px solid #fff; border-radius: 50%;
-            display: flex; justify-content: center; align-items: center; cursor: pointer;
+        .shutter {
+            width: 72px; height: 72px; border: 4px solid #fff; border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
         }
-        .shutter-inner {
-            width: 64px; height: 64px; background: #fff; border-radius: 50%;
-            transition: all 0.1s;
+        .shutter-in {
+            width: 60px; height: 60px; background: #fff; border-radius: 50%;
         }
-        .shutter-btn:active .shutter-inner { transform: scale(0.9); background: #ddd; }
+        .shutter:active .shutter-in { transform: scale(0.9); background: #ccc; }
 
-        /* 预览弹窗 */
+        /* 预览层 */
         .preview-modal {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: #1a1a1a; z-index: 100;
             display: none; flex-direction: column;
         }
-        .preview-body { flex: 1; padding: 20px; overflow-y: auto; text-align: center; }
-        .preview-item { margin-bottom: 20px; }
-        .preview-label { color: #aaa; font-size: 13px; margin-bottom: 8px; }
-        .preview-img {
-            width: 70%; border: 1px solid #555; border-radius: 4px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-        }
-        
-        .toolbar { padding: 20px; background: #222; display: flex; gap: 15px; }
-        .btn {
-            flex: 1; padding: 16px; border: none; border-radius: 8px;
-            font-size: 16px; font-weight: bold; cursor: pointer;
-        }
-        .btn-retry { background: #444; color: #fff; }
-        .btn-pdf { background: #2ecc71; color: #000; }
-
-        #err-msg {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(200,0,0,0.9); padding: 20px; border-radius: 10px;
-            text-align: center; display: none; z-index: 200; width: 80%;
-        }
+        .p-body { flex: 1; padding: 20px; overflow-y: auto; text-align: center; }
+        .p-img { width: 70%; border: 1px solid #555; margin-bottom: 20px; }
+        .p-foot { padding: 20px; display: flex; gap: 10px; background: #222; }
+        .btn { flex: 1; padding: 15px; border-radius: 8px; border: none; font-weight: bold; font-size: 16px; }
+        .btn-re { background: #444; color: #fff; }
+        .btn-dl { background: #0f0; color: #000; }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <span>彩色扫描</span>
-        <div class="switch-cam" onclick="switchCamera()">🔄 切换镜头</div>
+        <span id="status-text">正在启动相机...</span>
+        <button class="btn-switch" onclick="switchCam()">🔄 切换镜头</button>
     </div>
 
-    <div class="camera-viewport">
+    <div class="viewport">
         <video id="video" autoplay playsinline muted></video>
-        <div class="scan-guide">
-            <div class="guide-label" id="guide-text">请对准 身份证正面</div>
+        
+        <div class="guide-box">
+            <div class="guide-text" id="guide-tip">请对准 身份证正面</div>
+        </div>
+
+        <div id="error-layer">
+            <h3 style="color:#ff4444">网页相机启动失败</h3>
+            <p style="color:#aaa; font-size:14px; margin-bottom:20px" id="err-detail">
+                原因未知
+            </p>
+            <p style="font-size:14px">请点击下方按钮，使用系统自带相机拍摄：</p>
+            
+            <button class="err-btn" onclick="triggerSysCam()">📷 调用系统相机</button>
         </div>
     </div>
 
     <div class="controls">
-        <div class="shutter-btn" onclick="capturePhoto()">
-            <div class="shutter-inner"></div>
+        <div class="shutter" onclick="captureWebCam()">
+            <div class="shutter-in"></div>
         </div>
     </div>
+
+    <input type="file" id="sys-cam-input" class="fallback-input" accept="image/*" capture="environment" onchange="handleSysFile(this)">
 
     <div class="preview-modal" id="modal">
-        <div class="preview-body">
-            <h3 style="margin-top:0">扫描预览</h3>
-            <div class="preview-item">
-                <div class="preview-label">正面</div>
-                <img id="view-f" class="preview-img">
-            </div>
-            <div class="preview-item">
-                <div class="preview-label">反面</div>
-                <img id="view-b" class="preview-img">
-            </div>
+        <div class="p-body">
+            <h3>预览确认</h3>
+            <p style="color:#aaa">正面</p>
+            <img id="view-f" class="p-img">
+            <p style="color:#aaa">反面</p>
+            <img id="view-b" class="p-img">
         </div>
-        <div class="toolbar">
-            <button class="btn btn-retry" onclick="location.reload()">重拍</button>
-            <button class="btn btn-pdf" onclick="savePDF()">下载 PDF</button>
+        <div class="p-foot">
+            <button class="btn btn-re" onclick="location.reload()">重拍</button>
+            <button class="btn btn-dl" onclick="savePDF()">下载 PDF</button>
         </div>
     </div>
 
-    <div id="err-msg"></div>
-    <canvas id="cvs" style="display:none;"></canvas>
+    <canvas id="cvs" style="display:none"></canvas>
 
     <script>
-        let step = 1; 
+        // --- 核心逻辑 ---
+        let step = 1; // 1=正面, 2=反面
         let imgFront = null;
         let imgBack = null;
-        
-        // 摄像头管理
-        let currentStream = null;
-        let videoDevices = [];
-        let currentDeviceIndex = 0;
+        let stream = null;
+        let useSystemCam = false; // 标记是否被迫使用了系统相机
 
         const video = document.getElementById('video');
         const cvs = document.getElementById('cvs');
         const ctx = cvs.getContext('2d');
+        const errLayer = document.getElementById('error-layer');
+        const statusText = document.getElementById('status-text');
 
-        // 1. 初始化：列出所有摄像头
-        async function init() {
-            try {
-                // 先请求一次权限
-                await navigator.mediaDevices.getUserMedia({ video: true });
-                
-                // 获取所有设备
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                // 过滤出视频输入设备
-                videoDevices = devices.filter(device => device.kind === 'videoinput');
-
-                // 尝试找到后置摄像头作为默认
-                // 安卓上通常最后一个是后置主摄，或者标签包含 'back' / 'environment'
-                let backCamIndex = videoDevices.findIndex(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('environment'));
-                
-                if (backCamIndex !== -1) {
-                    currentDeviceIndex = backCamIndex;
-                } else {
-                    // 如果找不到明确的后置，就默认用最后一个（通常是后置）
-                    currentDeviceIndex = videoDevices.length - 1;
-                }
-
-                startCamera(videoDevices[currentDeviceIndex].deviceId);
-                
-            } catch (err) {
-                showError("无法获取摄像头列表，请检查权限。<br>" + err.message);
-            }
-        }
-
-        // 2. 启动指定 ID 的摄像头
-        async function startCamera(deviceId) {
-            if (currentStream) {
-                currentStream.getTracks().forEach(track => track.stop());
+        // 1. 初始化：尝试启动网页相机
+        async function initWebCam() {
+            // HTTPS 检查
+            if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+                showFallback("必须使用 HTTPS 协议才能调用相机。<br>请直接使用下方系统相机。");
+                return;
             }
 
             try {
-                const constraints = {
-                    video: {
-                        deviceId: deviceId ? { exact: deviceId } : undefined,
-                        // 关键：强制高清分辨率，这迫使安卓调用主摄像头，而不是模糊的副摄
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 }
-                    },
-                    audio: false
-                };
-
-                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-                video.srcObject = currentStream;
+                // 极简启动：先不挑肥拣瘦，能开就行，解决安卓打不开的问题
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment' } 
+                });
+                video.srcObject = stream;
+                statusText.innerText = "相机已就绪 (彩色)";
             } catch (err) {
-                // 如果高清失败，尝试普通模式
+                console.warn("后置失败，尝试通用模式", err);
                 try {
-                    const simpleConstraints = {
-                        video: { deviceId: deviceId ? { exact: deviceId } : undefined }
-                    };
-                    currentStream = await navigator.mediaDevices.getUserMedia(simpleConstraints);
-                    video.srcObject = currentStream;
+                    // 降级尝试
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    video.srcObject = stream;
+                    statusText.innerText = "相机已就绪 (兼容模式)";
                 } catch (fatal) {
-                    showError("摄像头启动失败: " + fatal.message);
+                    // 彻底失败，显示备用方案
+                    showFallback("无法访问摄像头 (权限被拒或不支持)。<br>请点击下方按钮。");
                 }
             }
         }
 
-        // 3. 手动切换摄像头 (修复安卓问题的核心)
-        function switchCamera() {
-            if (videoDevices.length < 2) {
-                alert("未检测到多个摄像头");
-                return;
-            }
-            // 循环切换
-            currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
-            startCamera(videoDevices[currentDeviceIndex].deviceId);
+        // 显示备用方案层
+        function showFallback(msg) {
+            useSystemCam = true;
+            video.style.display = 'none'; // 隐藏黑屏的video
+            errLayer.style.display = 'flex';
+            document.getElementById('err-detail').innerHTML = msg;
+            statusText.innerText = "切换至系统相机模式";
+            // 隐藏底部的拍照圆圈，避免混淆
+            document.querySelector('.controls').style.display = 'none';
         }
 
-        // 4. 拍照
-        function capturePhoto() {
+        // 2. 网页相机：拍照
+        function captureWebCam() {
             if (!video.srcObject) return;
-
-            // 确保视频已经准备好 (安卓防黑屏)
-            if (video.videoWidth === 0) {
-                alert("相机尚未就绪，请稍等...");
-                return;
-            }
-
+            
+            // 绘制
             cvs.width = video.videoWidth;
             cvs.height = video.videoHeight;
             ctx.drawImage(video, 0, 0);
 
-            const processedImg = smartCrop(cvs);
+            processAndNext(cvs);
+        }
+
+        // 3. 系统相机：触发与处理
+        function triggerSysCam() {
+            document.getElementById('sys-cam-input').click();
+        }
+
+        function handleSysFile(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        cvs.width = img.width;
+                        cvs.height = img.height;
+                        ctx.drawImage(img, 0, 0);
+                        processAndNext(cvs);
+                    }
+                    img.src = e.target.result;
+                }
+                reader.readAsDataURL(file);
+            }
+            // 清空input防止重复触发失效
+            input.value = ''; 
+        }
+
+        // 4. 通用处理：裁切 -> 下一步
+        function processAndNext(sourceCanvas) {
+            // 智能裁切 (只取中间 80%)
+            const finalImg = smartCrop(sourceCanvas);
 
             if (step === 1) {
-                imgFront = processedImg;
+                imgFront = finalImg;
                 step = 2;
-                document.getElementById('guide-text').innerText = "请对准 身份证反面";
-                // 闪屏
-                document.body.style.opacity = 0.5;
-                setTimeout(() => document.body.style.opacity = 1, 100);
+                document.getElementById('guide-tip').innerText = "请对准 身份证反面";
+                alert("正面已保存！\n请继续拍摄【反面】");
+                
+                // 如果是系统相机模式，自动再调起一次
+                if (useSystemCam) {
+                    setTimeout(() => triggerSysCam(), 500); 
+                }
             } else {
-                imgBack = processedImg;
-                showModal();
+                imgBack = finalImg;
+                showPreview();
             }
         }
 
-        // 5. 智能裁切
-        function smartCrop(sourceCanvas) {
-            const w = sourceCanvas.width;
-            const h = sourceCanvas.height;
-            const targetRatio = 1.58; 
-            const scale = 0.8; 
+        // 5. 智能裁切算法 (彩色)
+        function smartCrop(c) {
+            const w = c.width, h = c.height;
+            const ratio = 1.58; 
+            const scale = 0.8; // 裁切系数
             
             let cw, ch, cx, cy;
-            if (w / h > targetRatio) {
-                ch = h * scale; cw = ch * targetRatio;
-            } else {
-                cw = w * scale; ch = cw / targetRatio;
-            }
-            cx = (w - cw) / 2;
-            cy = (h - ch) / 2;
-
-            const tCvs = document.createElement('canvas');
-            tCvs.width = cw; tCvs.height = ch;
-            const tCtx = tCvs.getContext('2d');
-            tCtx.drawImage(sourceCanvas, cx, cy, cw, ch, 0, 0, cw, ch);
+            if (w/h > ratio) { ch = h*scale; cw = ch*ratio; }
+            else { cw = w*scale; ch = cw/ratio; }
             
-            return tCvs.toDataURL('image/jpeg', 0.95);
+            cx = (w-cw)/2; cy = (h-ch)/2;
+
+            const t = document.createElement('canvas');
+            t.width = cw; t.height = ch;
+            t.getContext('2d').drawImage(c, cx, cy, cw, ch, 0, 0, cw, ch);
+            return t.toDataURL('image/jpeg', 0.95);
         }
 
-        function showModal() {
+        function showPreview() {
             document.getElementById('view-f').src = imgFront;
             document.getElementById('view-b').src = imgBack;
             document.getElementById('modal').style.display = 'flex';
         }
 
+        // 6. 切换镜头 (网页相机模式专用)
+        async function switchCam() {
+            if (useSystemCam) {
+                alert("系统相机模式下，请在拍照界面内切换镜头。");
+                return;
+            }
+            // 简单粗暴：停止当前，重新请求 user（通常会切换到前置，再切回后置）
+            // 注意：Web标准切换镜头很麻烦，这里只做简单的重置尝试
+            if(stream) stream.getTracks().forEach(t=>t.stop());
+            initWebCam(); 
+        }
+
+        // 7. 生成 PDF
         function savePDF() {
             const { jsPDF } = window.jspdf;
-            const doc =
+            const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+            const w = 85.6; const h = 54; const x = (210-w)/2;
+
+            doc.setFontSize(14);
+            doc.text("ID Card Scan (Color)", 105, 15, {align:'center'});
+            
+            doc.setFontSize(10);
+            doc.text("Front:", x, 30);
+            doc.addImage(imgFront, 'JPEG', x, 35, w, h);
+            
+            doc.text("Back:", x, 35+h+15);
+            doc.addImage(imgBack, 'JPEG', x, 35+h+20, w, h);
+            
+            doc.save('身份证_扫描件.pdf');
+        }
+
+        // 启动
+        initWebCam();
+
+    </script>
+</body>
+</html>
