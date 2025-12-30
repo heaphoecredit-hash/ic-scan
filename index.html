@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>绝对对齐终极版</title>
+    <title>证件扫描专业版</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         /* === 基础设置 === */
@@ -20,7 +20,7 @@
         .paper-container {
             background: white; 
             width: 95vw; max-width: 500px; aspect-ratio: 210/297; 
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1); 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15); 
             border-radius: 4px;
             display: flex; flex-direction: column; 
             justify-content: center; align-items: center; 
@@ -72,21 +72,18 @@
             display: none; 
         }
 
-        /* 核心：用 Canvas 代替 Video 标签进行渲染 */
+        /* 渲染画布 */
         canvas#camera-canvas {
             display: block; width: 100%; height: 100%;
         }
 
-        /* 隐藏的 video 标签，只用于获取数据流 */
-        #hidden-video {
-            display: none;
-            position: absolute; top: 0; left: 0;
-        }
+        /* 隐藏的 video */
+        #hidden-video { display: none; }
 
         /* 界面控件层 */
         .ui-layer {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none; /* 让点击穿透 */
+            pointer-events: none; 
             display: flex; flex-direction: column; justify-content: space-between; align-items: center;
             padding: 40px 0;
             z-index: 20;
@@ -95,20 +92,21 @@
         .top-tip {
             color: white; background: rgba(0,0,0,0.5); 
             padding: 8px 16px; border-radius: 20px; font-size: 14px;
-            text-shadow: 0 1px 2px black;
+            text-shadow: 0 1px 2px black; margin-top: 20px;
         }
 
         .controls-area {
-            width: 100%; pointer-events: auto; /* 恢复点击 */
-            display: flex; flex-direction: column; align-items: center; gap: 20px;
-            padding-bottom: 20px;
+            width: 100%; pointer-events: auto;
+            display: flex; flex-direction: column; align-items: center; gap: 25px;
+            padding-bottom: 30px;
         }
 
         /* 模式切换按钮 */
         .mode-btn {
             background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.5);
-            color: #4ade80; padding: 8px 20px; border-radius: 20px; 
+            color: #4ade80; padding: 10px 24px; border-radius: 30px; 
             font-size: 14px; cursor: pointer; backdrop-filter: blur(4px);
+            transition: all 0.3s;
         }
 
         .shutter-row {
@@ -116,20 +114,21 @@
         }
 
         .shutter-btn { 
-            width: 80px; height: 80px; background: white; border-radius: 50%; 
-            border: 6px solid rgba(220,220,220,0.5); cursor: pointer; 
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            width: 72px; height: 72px; background: white; border-radius: 50%; 
+            border: 4px solid rgba(255,255,255,0.8); cursor: pointer; 
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            transition: transform 0.1s;
         }
-        .shutter-btn:active { transform: scale(0.95); background: #eee; }
+        .shutter-btn:active { transform: scale(0.9); background: #eee; }
 
         .circle-btn {
-            width: 50px; height: 50px; border-radius: 50%;
+            width: 48px; height: 48px; border-radius: 50%;
             background: rgba(255,255,255,0.2); backdrop-filter: blur(4px);
             border: none; color: white; font-size: 12px;
-            display: flex; align-items: center; justify-content: center;
-            text-align: center; cursor: pointer;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: pointer;
         }
-
+        
         .generating .scan-slot { border: none; background: white; }
         .generating .slot-placeholder { display: none; }
     </style>
@@ -138,11 +137,17 @@
 
     <div class="paper-container" id="pdf-area">
         <div class="scan-slot" onclick="startCamera('front')">
-            <div class="slot-placeholder" id="ph-front"><h3>+ 身份证人像面</h3><p>点击拍摄</p></div>
+            <div class="slot-placeholder" id="ph-front">
+                <span style="font-size:24px">📷</span>
+                <h3>拍摄人像面</h3><p>点击开启相机</p>
+            </div>
             <img id="img-front">
         </div>
         <div class="scan-slot" onclick="startCamera('back')">
-            <div class="slot-placeholder" id="ph-back"><h3>+ 身份证国徽面</h3><p>点击拍摄</p></div>
+            <div class="slot-placeholder" id="ph-back">
+                <span style="font-size:24px">📷</span>
+                <h3>拍摄国徽面</h3><p>点击开启相机</p>
+            </div>
             <img id="img-back">
         </div>
     </div>
@@ -154,28 +159,24 @@
 
     <div class="camera-overlay" id="cam-modal">
         <video id="hidden-video" autoplay playsinline muted></video>
-        
         <canvas id="camera-canvas"></canvas>
 
         <div class="ui-layer">
-            <div class="top-tip">请将证件<b>填满</b>绿色框</div>
+            <div class="top-tip">将证件放入框内，自动居中裁剪</div>
             
             <div class="controls-area">
-                <button class="mode-btn" id="color-btn" onclick="toggleColor()">
-                    🎨 模式：彩色原图
-                </button>
+                <button class="mode-btn" id="color-btn" onclick="toggleColor()">🎨 当前：彩色原图</button>
 
                 <div class="shutter-row">
                     <button class="circle-btn" onclick="closeCamera()">取消</button>
                     <button class="shutter-btn" onclick="takePhoto()"></button>
-                    <button class="circle-btn" onclick="switchCamera()">切换<br>镜头</button>
+                    <button class="circle-btn" onclick="switchCamera()">切换</button>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        // === 状态管理 ===
         let stream = null;
         let animationId = null;
         let currentSide = '';
@@ -183,7 +184,6 @@
         let devices = [];
         let devIdx = 0;
 
-        // DOM 元素
         const video = document.getElementById('hidden-video');
         const canvas = document.getElementById('camera-canvas');
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -194,13 +194,13 @@
         function toggleColor() {
             isColor = !isColor;
             if (isColor) {
-                colorBtn.innerText = "🎨 模式：彩色原图";
+                colorBtn.innerText = "🎨 当前：彩色原图";
                 colorBtn.style.color = "#4ade80";
-                colorBtn.style.borderColor = "rgba(255,255,255,0.5)";
+                colorBtn.style.borderColor = "rgba(74, 222, 128, 0.5)";
             } else {
-                colorBtn.innerText = "📄 模式：黑白复印";
+                colorBtn.innerText = "📄 当前：黑白复印";
                 colorBtn.style.color = "white";
-                colorBtn.style.borderColor = "white";
+                colorBtn.style.borderColor = "rgba(255,255,255,0.5)";
             }
         }
 
@@ -208,20 +208,18 @@
         async function startCamera(side) {
             currentSide = side;
             modal.style.display = 'block';
-            
-            // 设置画布尺寸为全屏
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
 
-            // 优先后置
             try {
+                // 优先请求高清后置
                 await startStream({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } });
             } catch (e) {
                 await startStream({ video: true }); // 降级
             }
             
             await listDevices();
-            drawLoop(); // 开始画布渲染循环
+            drawLoop(); // 启动渲染循环
         }
 
         async function startStream(constraints) {
@@ -231,7 +229,7 @@
                 video.srcObject = stream;
                 await video.play();
             } catch (e) {
-                alert("无法启动相机: " + e.message);
+                alert("相机启动失败，请检查HTTPS和权限: " + e.message);
             }
         }
 
@@ -247,53 +245,45 @@
             await startStream({ video: { deviceId: { exact: devices[devIdx].deviceId } } });
         }
 
-        // 3. 核心：画布渲染循环 (The Magic)
-        // 这个函数每秒运行60次，负责把视频画到屏幕上，并画上绿框
+        // 3. 核心：专业取景框绘制
         function drawLoop() {
             if (modal.style.display === 'none') return;
             
-            // A. 清空画布
             const cW = canvas.width;
             const cH = canvas.height;
             ctx.clearRect(0, 0, cW, cH);
 
-            // B. 绘制视频 (模拟 object-fit: cover)
             const vW = video.videoWidth;
             const vH = video.videoHeight;
             
+            // 绘制底层视频
             if (vW && vH) {
-                // 计算填充比例
                 const scale = Math.max(cW / vW, cH / vH);
                 const drawW = vW * scale;
                 const drawH = vH * scale;
-                // 居中偏移
                 const offsetX = (cW - drawW) / 2;
                 const offsetY = (cH - drawH) / 2;
-                
-                // 将视频画到底层
                 ctx.drawImage(video, offsetX, offsetY, drawW, drawH);
             }
 
-            // C. 绘制遮罩层 (半透明黑)
-            ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+            // 计算取景框位置 (标准身份证比例)
+            const boxW = cW * 0.85; 
+            const boxH = boxW / 1.585; 
+            const boxX = (cW - boxW) / 2;
+            const boxY = (cH - boxH) / 2 - 40;
+
+            // === 绘制黑色遮罩 (更深色 0.85) ===
+            ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
             ctx.fillRect(0, 0, cW, cH);
 
-            // D. 绘制“挖空”区域 (绿框区域)
-            // 计算绿框尺寸：宽=屏幕85%，高=宽/1.585
-            const boxW = cW * 0.85;
-            const boxH = boxW / 1.585;
-            const boxX = (cW - boxW) / 2;
-            const boxY = (cH - boxH) / 2 - 50; // 稍微靠上
-
-            // 使用 clearRect "挖"出一个洞，让底下的视频露出来
+            // === 挖空中间 (让视频亮起来) ===
             ctx.clearRect(boxX, boxY, boxW, boxH);
-            // 这里必须重新画一次视频在洞里，因为刚才fillRect盖住了
-            // (虽然性能损耗一点，但这是实现挖空最简单的逻辑兼容性最好)
+            
+            // 为了保证挖空区域有画面，需要再画一次视频，并裁剪
             ctx.save();
             ctx.beginPath();
             ctx.rect(boxX, boxY, boxW, boxH);
             ctx.clip();
-            // 重新绘制视频在裁剪区
             if (vW && vH) {
                 const scale = Math.max(cW / vW, cH / vH);
                 const drawW = vW * scale;
@@ -304,34 +294,51 @@
             }
             ctx.restore();
 
-            // E. 绘制绿框边框
+            // === 绘制专业取景框 (四角) ===
+            const lineLen = 20; // 角线长度
+            ctx.lineWidth = 4;
             ctx.strokeStyle = "#00ff00";
-            ctx.lineWidth = 3;
+            ctx.lineCap = "round";
+
+            ctx.beginPath();
+            // 左上角
+            ctx.moveTo(boxX, boxY + lineLen); ctx.lineTo(boxX, boxY); ctx.lineTo(boxX + lineLen, boxY);
+            // 右上角
+            ctx.moveTo(boxX + boxW - lineLen, boxY); ctx.lineTo(boxX + boxW, boxY); ctx.lineTo(boxX + boxW, boxY + lineLen);
+            // 右下角
+            ctx.moveTo(boxX + boxW, boxY + boxH - lineLen); ctx.lineTo(boxX + boxW, boxY + boxH); ctx.lineTo(boxX + boxW - lineLen, boxY + boxH);
+            // 左下角
+            ctx.moveTo(boxX + lineLen, boxY + boxH); ctx.lineTo(boxX, boxY + boxH); ctx.lineTo(boxX, boxY + boxH - lineLen);
+            ctx.stroke();
+
+            // 绘制中间的细虚线框 (辅助对齐)
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+            ctx.setLineDash([5, 5]);
             ctx.strokeRect(boxX, boxY, boxW, boxH);
+            ctx.setLineDash([]); // 恢复实线
 
             animationId = requestAnimationFrame(drawLoop);
         }
 
-        // 4. 拍照 (WYSIWYG: 所见即所得)
+        // 4. 拍照与裁剪
         function takePhoto() {
-            // 停止渲染循环，定格画面
             cancelAnimationFrame(animationId);
 
-            // 计算绿框位置
             const cW = canvas.width;
             const cH = canvas.height;
             const boxW = cW * 0.85;
             const boxH = boxW / 1.585;
             const boxX = (cW - boxW) / 2;
-            const boxY = (cH - boxH) / 2 - 50;
+            const boxY = (cH - boxH) / 2 - 40;
 
-            // 1. 创建临时画布，只绘制纯净的视频
+            // 1. 创建高清画布
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = cW;
             tempCanvas.height = cH;
             const tCtx = tempCanvas.getContext('2d');
             
-            // 重新计算视频位置
+            // 2. 绘制当前视频帧
             const vW = video.videoWidth;
             const vH = video.videoHeight;
             const scale = Math.max(cW / vW, cH / vH);
@@ -339,34 +346,31 @@
             const drawH = vH * scale;
             const offsetX = (cW - drawW) / 2;
             const offsetY = (cH - drawH) / 2;
-            
-            // 绘制纯视频到临时画布 (没有黑框遮罩)
             tCtx.drawImage(video, offsetX, offsetY, drawW, drawH);
 
-            // 2. 从临时画布中提取绿框区域
-            // 这一步保证了：你刚才看到的绿框里是什么，提取出来的就是什么
+            // 3. 提取绿框区域
             const cropData = tCtx.getImageData(boxX, boxY, boxW, boxH);
 
-            // 3. 放到最终结果画布上
+            // 4. 生成最终图片
             const finalCanvas = document.createElement('canvas');
             finalCanvas.width = boxW;
             finalCanvas.height = boxH;
             const fCtx = finalCanvas.getContext('2d');
             fCtx.putImageData(cropData, 0, 0);
 
-            // 4. 黑白处理 (如果需要)
+            // 5. 黑白处理
             if (!isColor) {
                 const imgData = fCtx.getImageData(0, 0, finalCanvas.width, finalCanvas.height);
                 const data = imgData.data;
                 for (let i = 0; i < data.length; i += 4) {
                     const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-                    const val = gray > 110 ? 255 : gray * 0.7;
+                    const val = gray > 115 ? 255 : gray * 0.7; // 对比度增强
                     data[i] = data[i+1] = data[i+2] = val;
                 }
                 fCtx.putImageData(imgData, 0, 0);
             }
 
-            // 5. 显示结果
+            // 6. 显示并居中
             const img = document.getElementById('img-' + currentSide);
             const ph = document.getElementById('ph-' + currentSide);
             img.src = finalCanvas.toDataURL('image/jpeg', 0.95);
@@ -385,10 +389,9 @@
             }
         }
 
-        // PDF 生成
         function makePDF() {
             const el = document.getElementById('pdf-area');
-            if (!document.getElementById('img-front').src) { return alert("请先拍摄"); }
+            if (!document.getElementById('img-front').src) { return alert("请先拍摄照片"); }
             el.classList.add('generating');
             html2pdf().set({ 
                 margin: 0, 
