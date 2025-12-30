@@ -3,190 +3,272 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>证件复印机终极版</title>
+    <title>身份证高清彩色扫描</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
         body {
             margin: 0; padding: 0; background: #000; color: #fff;
-            font-family: sans-serif; height: 100vh; overflow: hidden;
+            font-family: -apple-system, sans-serif; height: 100vh; overflow: hidden;
             display: flex; flex-direction: column;
         }
-        .camera-box {
-            position: relative; flex: 1; background: #000;
+
+        /* 顶部标题 */
+        .header {
+            height: 50px; background: #000; z-index: 10;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 16px; font-weight: 600; letter-spacing: 1px;
+        }
+
+        /* 相机视窗 */
+        .camera-viewport {
+            position: relative; flex: 1; background: #111;
             display: flex; justify-content: center; align-items: center; overflow: hidden;
         }
         video { width: 100%; height: 100%; object-fit: cover; }
-        /* 扫描框：视觉引导 */
-        .scan-overlay {
-            position: absolute; width: 85%; aspect-ratio: 1.58 / 1;
-            border: 2px solid #00ff00; border-radius: 4px;
-            box-shadow: 0 0 0 100vmax rgba(0,0,0,0.7); /* 背景压得更暗，突出主体 */
-            z-index: 10; pointer-events: none;
+
+        /* 绿色引导框 */
+        .scan-guide {
+            position: absolute;
+            width: 85%; aspect-ratio: 1.58 / 1;
+            border: 2px solid #2ecc71; /* 鲜艳的绿色 */
+            border-radius: 6px;
+            box-shadow: 0 0 0 100vmax rgba(0,0,0,0.5); /* 适度压暗背景 */
+            pointer-events: none; z-index: 5;
         }
-        .hint {
-            position: absolute; bottom: -40px; width: 100%; text-align: center;
-            font-size: 16px; text-shadow: 1px 1px 2px black; font-weight: bold;
+        .guide-label {
+            position: absolute; width: 100%; text-align: center;
+            bottom: -35px; font-size: 15px; color: #fff;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.8);
         }
+
+        /* 底部操作区 */
         .controls {
-            height: 130px; background: #111;
+            height: 140px; background: #000;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            z-index: 20;
+            z-index: 10;
         }
-        .shutter-out {
-            width: 70px; height: 70px; border: 4px solid #fff; border-radius: 50%;
+        
+        /* 拍照快门 */
+        .shutter-btn {
+            width: 76px; height: 76px; border: 4px solid #fff; border-radius: 50%;
             display: flex; justify-content: center; align-items: center; cursor: pointer;
         }
-        .shutter-in { width: 58px; height: 58px; background: #fff; border-radius: 50%; }
-        .shutter-out:active .shutter-in { transform: scale(0.9); background: #ccc; }
-        
-        /* 预览层 */
+        .shutter-inner {
+            width: 64px; height: 64px; background: #fff; border-radius: 50%;
+            transition: all 0.1s;
+        }
+        .shutter-btn:active .shutter-inner { transform: scale(0.9); background: #ddd; }
+
+        /* 预览弹窗 */
         .preview-modal {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #222; z-index: 50; display: none; flex-direction: column; padding: 20px;
+            background: #1a1a1a; z-index: 100;
+            display: none; flex-direction: column;
         }
-        .res-img {
-            width: 100%; max-width: 300px; margin: 10px auto; display: block;
-            border: 2px solid #fff;
-            /* CSS预览滤镜，让用户提前看到效果 */
-            filter: grayscale(100%) contrast(150%) brightness(1.1);
+        .preview-body {
+            flex: 1; padding: 20px; overflow-y: auto; text-align: center;
         }
-        .btn-pdf {
-            margin-top: auto; padding: 18px; background: #00ff00; color: #000;
-            border: none; border-radius: 8px; font-size: 18px; font-weight: bold;
+        .preview-item { margin-bottom: 20px; }
+        .preview-label { color: #aaa; font-size: 13px; margin-bottom: 8px; }
+        .preview-img {
+            width: 65%; /* 屏幕预览不用太大 */
+            border: 1px solid #555; border-radius: 4px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        
+        .toolbar {
+            padding: 20px; background: #222;
+            display: flex; gap: 15px;
+        }
+        .btn {
+            flex: 1; padding: 16px; border: none; border-radius: 8px;
+            font-size: 16px; font-weight: bold; cursor: pointer;
+        }
+        .btn-retry { background: #444; color: #fff; }
+        .btn-pdf { background: #2ecc71; color: #000; }
+
+        /* 错误提示 */
+        #err-msg {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(200,0,0,0.9); padding: 20px; border-radius: 10px;
+            text-align: center; display: none; z-index: 200; width: 80%;
         }
     </style>
 </head>
 <body>
 
-    <div class="camera-box">
+    <div class="header">高清彩色扫描</div>
+
+    <div class="camera-viewport">
         <video id="video" autoplay playsinline muted></video>
-        <div class="scan-overlay">
-            <div class="hint" id="hintText">请对准 身份证正面</div>
+        <div class="scan-guide">
+            <div class="guide-label" id="guide-text">请对准 身份证正面</div>
         </div>
     </div>
 
     <div class="controls">
-        <div class="shutter-out" onclick="takePhoto()"><div class="shutter-in"></div></div>
+        <div class="shutter-btn" onclick="capturePhoto()">
+            <div class="shutter-inner"></div>
+        </div>
     </div>
 
-    <div class="preview-modal" id="preview">
-        <h3 style="text-align:center">复印件预览</h3>
-        <p style="text-align:center;color:#aaa">正面</p>
-        <img id="img-f" class="res-img">
-        <p style="text-align:center;color:#aaa">反面</p>
-        <img id="img-b" class="res-img">
-        <button class="btn-pdf" onclick="downloadPDF()">下载标准尺寸 A4 PDF</button>
-        <button onclick="location.reload()" style="margin-top:10px;padding:10px;background:none;border:none;color:#fff;text-decoration:underline">重新拍摄</button>
+    <div class="preview-modal" id="modal">
+        <div class="preview-body">
+            <h3 style="margin-top:0">扫描预览</h3>
+            
+            <div class="preview-item">
+                <div class="preview-label">正面 (Front)</div>
+                <img id="view-f" class="preview-img">
+            </div>
+            
+            <div class="preview-item">
+                <div class="preview-label">反面 (Back)</div>
+                <img id="view-b" class="preview-img">
+            </div>
+        </div>
+        <div class="toolbar">
+            <button class="btn btn-retry" onclick="location.reload()">重新拍摄</button>
+            <button class="btn btn-pdf" onclick="savePDF()">下载标准 PDF</button>
+        </div>
     </div>
 
+    <div id="err-msg"></div>
     <canvas id="cvs" style="display:none;"></canvas>
 
     <script>
-        let step = 1; // 1=正面, 2=反面
-        let dataF, dataB;
+        // 全局状态
+        let step = 1; 
+        let imgFront = null;
+        let imgBack = null;
+
         const video = document.getElementById('video');
         const cvs = document.getElementById('cvs');
         const ctx = cvs.getContext('2d');
 
-        // 启动相机 (兼容安卓)
-        navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: 'environment' }, audio: false 
-        }).then(stream => video.srcObject = stream)
-          .catch(e => alert("相机启动失败，请检查权限或使用HTTPS"));
+        // 1. 启动相机 (最大兼容性模式)
+        async function startCamera() {
+            try {
+                // 优先尝试后置高清
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' },
+                    audio: false
+                });
+                video.srcObject = stream;
+            } catch (err) {
+                // 失败则降级：只要有视频流就行
+                console.warn("后置调用失败，尝试降级", err);
+                try {
+                    const streamAny = await navigator.mediaDevices.getUserMedia({ video: true });
+                    video.srcObject = streamAny;
+                } catch (fatal) {
+                    showError("相机启动失败！<br>请确保允许浏览器访问摄像头。<br>" + fatal.message);
+                }
+            }
+        }
 
-        function takePhoto() {
+        // 2. 拍照与处理 (保留彩色，不做黑白处理)
+        function capturePhoto() {
             if (!video.srcObject) return;
-            
-            // 1. 绘制原始帧
+
+            // 抓取当前帧
             cvs.width = video.videoWidth;
             cvs.height = video.videoHeight;
             ctx.drawImage(video, 0, 0);
 
-            // 2. 智能处理：收紧裁切 + 暴力复印滤镜
-            const processedData = processImage(cvs);
+            // 智能裁切 (保持比例，去除背景)
+            const processedImg = smartCrop(cvs);
 
             if (step === 1) {
-                dataF = processedData;
-                document.getElementById('hintText').innerText = "请对准 身份证反面";
+                imgFront = processedImg;
                 step = 2;
-                // 闪屏反馈
-                document.body.style.backgroundColor = '#fff';
-                setTimeout(()=> document.body.style.backgroundColor = '#000', 50);
+                document.getElementById('guide-text').innerText = "请对准 身份证反面";
+                // 简单的闪屏动画
+                document.body.style.opacity = 0.5;
+                setTimeout(() => document.body.style.opacity = 1, 100);
             } else {
-                dataB = processedData;
-                video.srcObject.getTracks().forEach(t => t.stop()); // 停止相机
-                showPreview();
+                imgBack = processedImg;
+                showModal();
             }
         }
 
-        // --- 核心：图像处理算法改进 ---
-        function processImage(sourceCanvas) {
-            const vw = sourceCanvas.width, vh = sourceCanvas.height;
-            const ratio = 1.58;
+        // 3. 智能裁切 (不改色，只切图)
+        function smartCrop(sourceCanvas) {
+            const w = sourceCanvas.width;
+            const h = sourceCanvas.height;
+            const targetRatio = 1.58; // 身份证比例
             
-            // 【改进点1：更激进的裁切】
-            // 之前是用0.85，现在用 0.80 (即只取画面中心80%的区域)，强制去除边缘背景
-            const cropFactor = 0.80; 
-
+            // 裁切系数：0.8 表示只取画面中间 80% 的内容，防止把桌子拍进去
+            const scale = 0.8; 
+            
             let cw, ch, cx, cy;
-            if (vw / vh > ratio) {
-                ch = vh * cropFactor; cw = ch * ratio;
+            // 计算最大符合比例的矩形
+            if (w / h > targetRatio) {
+                ch = h * scale;
+                cw = ch * targetRatio;
             } else {
-                cw = vw * cropFactor; ch = cw / ratio;
+                cw = w * scale;
+                ch = cw / targetRatio;
             }
-            cx = (vw - cw) / 2; cy = (vh - ch) / 2;
+            cx = (w - cw) / 2;
+            cy = (h - ch) / 2;
 
+            // 绘制到新画布
             const tCvs = document.createElement('canvas');
-            tCvs.width = cw; tCvs.height = ch;
+            tCvs.width = cw;
+            tCvs.height = ch;
             const tCtx = tCvs.getContext('2d');
+            
             tCtx.drawImage(sourceCanvas, cx, cy, cw, ch, 0, 0, cw, ch);
-
-            // 【改进点2：二值化复印滤镜】
-            const imgData = tCtx.getImageData(0, 0, cw, ch);
-            const d = imgData.data;
-            // 阈值：大于160的变白，小于的变黑。这个值控制复印件的“黑度”
-            const threshold = 160; 
-
-            for (let i = 0; i < d.length; i += 4) {
-                // 算出灰度值
-                const gray = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
-                // 暴力二值化：要么是深黑(30)，要么是纯白(255)
-                // 不使用纯黑0是为了保留一点点墨粉的质感
-                const final = gray > threshold ? 255 : 30;
-                d[i] = d[i+1] = d[i+2] = final;
-            }
-            tCtx.putImageData(imgData, 0, 0);
-            return tCvs.toDataURL('image/jpeg', 0.9);
+            
+            // 直接输出彩色 JPG，质量 0.95
+            return tCvs.toDataURL('image/jpeg', 0.95);
         }
 
-        function showPreview() {
-            document.getElementById('img-f').src = dataF;
-            document.getElementById('img-b').src = dataB;
-            document.getElementById('preview').style.display = 'flex';
+        // 4. 显示预览
+        function showModal() {
+            document.getElementById('view-f').src = imgFront;
+            document.getElementById('view-b').src = imgBack;
+            document.getElementById('modal').style.display = 'flex';
         }
 
-        // --- 核心：PDF尺寸精准控制 ---
-        function downloadPDF() {
+        // 5. 生成标准 PDF (严格尺寸)
+        function savePDF() {
             const { jsPDF } = window.jspdf;
-            // 【改进点3：强制使用毫米单位】
-            const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+            // 创建 A4 PDF，单位毫米
+            const doc = new jsPDF({ unit: 'mm', format: 'a4' });
 
-            const a4w = 210; // A4宽度mm
-            // 【关键：身份证物理标准宽度 85.6mm】
-            const idW = 85.6; 
-            const idH = idW / 1.58; 
-            const marginX = (a4w - idW) / 2; // 居中计算
+            // 身份证标准物理尺寸
+            const idWidth = 85.6; 
+            const idHeight = 54;
+            
+            // 计算水平居中 X 坐标
+            const x = (210 - idWidth) / 2;
 
-            doc.setFontSize(12);
-            doc.text("ID Card Copy", a4w/2, 20, { align: 'center' });
+            doc.setFontSize(14);
+            doc.text("ID Card Scan (Color)", 105, 15, { align: 'center' });
 
-            // 精准放置图片
-            doc.addImage(dataF, 'JPEG', marginX, 30, idW, idH);
-            doc.addImage(dataB, 'JPEG', marginX, 30 + idH + 15, idW, idH);
+            // 插入正面
+            doc.setFontSize(10);
+            doc.text("Front Side:", x, 30);
+            doc.addImage(imgFront, 'JPEG', x, 35, idWidth, idHeight);
 
-            doc.save('身份证标准复印件.pdf');
+            // 插入反面
+            doc.text("Back Side:", x, 35 + idHeight + 15);
+            doc.addImage(imgBack, 'JPEG', x, 35 + idHeight + 20, idWidth, idHeight);
+
+            doc.save('身份证_彩色扫描件.pdf');
         }
+
+        function showError(msg) {
+            const el = document.getElementById('err-msg');
+            el.innerHTML = msg;
+            el.style.display = 'block';
+        }
+
+        // 启动
+        startCamera();
+
     </script>
 </body>
 </html>
