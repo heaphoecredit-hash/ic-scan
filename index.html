@@ -3,15 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>IC 正反面一页（安卓后摄/直接保存PDF）</title>
+  <title>IC 正反面 → A4 PDF（上下排，复印大小）</title>
 
-  <!-- jsPDF (CDN) -->
+  <!-- jsPDF：直接生成并下载 PDF -->
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
   <style>
     :root{
-      --bg:#0b0b0f; --card:#12121a; --line:#232336; --txt:#fff; --muted:#a8a8b8;
-      --accent:#00d084;
+      --bg:#0b0b0f; --card:#12121a; --line:#2a2a36; --txt:#fff; --muted:#b9b9c6; --accent:#00d084;
     }
     *{box-sizing:border-box}
     body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
@@ -19,58 +18,61 @@
     .card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
     .head{padding:12px 14px;border-bottom:1px solid var(--line)}
     .title{font-weight:800}
-    .sub{color:var(--muted);font-size:12px;margin-top:6px;line-height:1.4}
+    .sub{margin-top:6px;color:var(--muted);font-size:12px;line-height:1.45}
     .controls{padding:12px 14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
     button{
       appearance:none;border:0;border-radius:12px;padding:12px 14px;
       background:#0d3b2f;color:#eafff8;font-weight:800;cursor:pointer
     }
-    button[disabled]{opacity:.45;cursor:not-allowed}
-    .ghost{background:transparent;border:1px solid var(--line);color:var(--txt);font-weight:700}
+    button.ghost{background:transparent;border:1px solid var(--line);color:var(--txt);font-weight:800}
+    button:disabled{opacity:.45;cursor:not-allowed}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 14px 16px}
-    @media (max-width:700px){.grid{grid-template-columns:1fr}}
+    @media (max-width:780px){.grid{grid-template-columns:1fr}}
     .slot{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#0a0a0f}
     .slot .cap{padding:10px 12px;border-bottom:1px solid var(--line);color:var(--muted);font-size:12px}
-    .slot img{width:100%;height:240px;object-fit:contain;display:block;background:#000}
-    .hint{padding:0 14px 14px;color:var(--muted);font-size:12px;line-height:1.5}
+    .slot img{width:100%;height:220px;object-fit:contain;display:block;background:#000}
+    .note{padding:0 14px 14px;color:var(--muted);font-size:12px;line-height:1.45}
     input[type=file]{display:none}
+    .ok{color:#bfffe8}
+    .bad{color:#ffd1d1}
   </style>
 </head>
+
 <body>
   <div class="wrap">
     <div class="card">
       <div class="head">
-        <div class="title">IC 正反面一页（安卓后摄 / 直接保存PDF）</div>
+        <div class="title">IC 正反面 → A4 PDF（上下排，复印大小）</div>
         <div class="sub">
-          建议用安卓 Chrome 打开（HTTPS）。点击按钮会调用系统相机后摄拍照；会自动裁切成“只剩证件”（无边框）。
+          使用系统相机（后摄优先），拍完自动裁切为证件比例；直接下载 PDF，不经过打印。
         </div>
       </div>
 
       <div class="controls">
         <button id="frontBtn">拍 IC 正面（后摄）</button>
         <button id="backBtn">拍 IC 反面（后摄）</button>
-        <button id="savePdfBtn" disabled>保存PDF（A4竖）</button>
+        <button id="saveBtn" disabled>保存 PDF</button>
         <button id="clearBtn" class="ghost">清除重拍</button>
       </div>
 
       <div class="grid">
         <div class="slot">
-          <div class="cap">正面（已自动裁成证件比例）</div>
+          <div class="cap">正面预览（已自动裁切）</div>
           <img id="frontImg" alt="front">
         </div>
         <div class="slot">
-          <div class="cap">反面（已自动裁成证件比例）</div>
+          <div class="cap">反面预览（已自动裁切）</div>
           <img id="backImg" alt="back">
         </div>
       </div>
 
-      <div class="hint">
-        如果你是在微信/FB/IG 内置浏览器打开，可能会无法调用相机。请复制网址到 Chrome 打开。
+      <div class="note" id="msg">
+        状态：<span class="ok">等待拍照</span>
       </div>
     </div>
   </div>
 
-  <!-- System camera capture (rear) -->
+  <!-- 系统相机：安卓后摄稳定；iPhone Safari 也可用 -->
   <input id="frontInput" type="file" accept="image/*" capture="environment">
   <input id="backInput"  type="file" accept="image/*" capture="environment">
 
@@ -78,8 +80,8 @@
 (() => {
   const frontBtn = document.getElementById('frontBtn');
   const backBtn  = document.getElementById('backBtn');
+  const saveBtn  = document.getElementById('saveBtn');
   const clearBtn = document.getElementById('clearBtn');
-  const savePdfBtn = document.getElementById('savePdfBtn');
 
   const frontInput = document.getElementById('frontInput');
   const backInput  = document.getElementById('backInput');
@@ -87,19 +89,25 @@
   const frontImg = document.getElementById('frontImg');
   const backImg  = document.getElementById('backImg');
 
+  const msg = document.getElementById('msg');
+
   let frontDataUrl = '';
   let backDataUrl  = '';
 
-  // 防抖（避免连点）
-  let locked = false;
-  const lock = () => { locked = true; setTimeout(()=>locked=false, 600); };
-
-  // 证件比例（MyKad / IC 约 85.6×54mm => 1.585）
+  // 证件比例（ID-1：85.6 × 54 mm）
   const CARD_RATIO = 85.6 / 54;
 
-  function updateState(){
-    savePdfBtn.disabled = !(frontDataUrl && backDataUrl);
+  function setMsg(ok, text){
+    msg.innerHTML = '状态：' + (ok ? `<span class="ok">${text}</span>` : `<span class="bad">${text}</span>`);
   }
+
+  function updateState(){
+    saveBtn.disabled = !(frontDataUrl && backDataUrl);
+  }
+
+  // 防连点
+  let locked = false;
+  function lock(){ locked = true; setTimeout(()=>locked=false, 500); }
 
   function fileToImage(file){
     return new Promise((resolve, reject) => {
@@ -111,20 +119,18 @@
     });
   }
 
-  // 自动裁切：从照片中心裁出“证件比例”区域（去掉多余背景/边框）
+  // 自动裁切为证件比例（去掉多余背景）
   function cropToCard(img){
     const sw = img.naturalWidth;
     const sh = img.naturalHeight;
 
-    // 目标裁切框：尽量大，保持 CARD_RATIO
     let cw = sw;
     let ch = Math.round(cw / CARD_RATIO);
-    if(ch > sh){
+    if (ch > sh) {
       ch = sh;
       cw = Math.round(ch * CARD_RATIO);
     }
 
-    // 中心裁切
     const sx = Math.round((sw - cw) / 2);
     const sy = Math.round((sh - ch) / 2);
 
@@ -132,10 +138,8 @@
     canvas.width = cw;
     canvas.height = ch;
     const ctx = canvas.getContext('2d');
-
     ctx.drawImage(img, sx, sy, cw, ch, 0, 0, cw, ch);
 
-    // 输出 JPEG
     return canvas.toDataURL('image/jpeg', 0.92);
   }
 
@@ -144,17 +148,25 @@
     inputEl.value = '';
     if(!file) return;
 
-    const img = await fileToImage(file);
-    const cropped = cropToCard(img);
+    setMsg(true, '处理中…');
+    try{
+      const img = await fileToImage(file);
+      const cropped = cropToCard(img);
 
-    if(side === 'front'){
-      frontDataUrl = cropped;
-      frontImg.src = cropped;
-    } else {
-      backDataUrl = cropped;
-      backImg.src = cropped;
+      if(side === 'front'){
+        frontDataUrl = cropped;
+        frontImg.src = cropped;
+      }else{
+        backDataUrl = cropped;
+        backImg.src = cropped;
+      }
+
+      updateState();
+      setMsg(true, (frontDataUrl && backDataUrl) ? '已完成，可保存 PDF' : '已拍一面，请继续拍另一面');
+    }catch(e){
+      console.error(e);
+      setMsg(false, '处理失败，请重拍');
     }
-    updateState();
   }
 
   frontBtn.onclick = () => { if(locked) return; lock(); frontInput.click(); };
@@ -164,46 +176,52 @@
   backInput.addEventListener('change',  () => handlePick(backInput, 'back'));
 
   clearBtn.onclick = () => {
-    frontDataUrl = ''; backDataUrl = '';
+    frontDataUrl = '';
+    backDataUrl = '';
     frontImg.removeAttribute('src');
     backImg.removeAttribute('src');
     updateState();
+    setMsg(true, '已清除，等待拍照');
   };
 
-  savePdfBtn.onclick = async () => {
-    if(!frontDataUrl || !backDataUrl) return;
+  // 生成 A4 PDF：上下排，证件=普通复印大小，无文字
+  saveBtn.onclick = () => {
+    if(!(frontDataUrl && backDataUrl)) return;
 
     const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation:'p', unit:'mm', format:'a4' });
+    const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
 
-    // A4: 210×297mm，留边
-    const margin = 10;
-    const pageW = 210, pageH = 297;
-    const innerW = pageW - margin*2;
+    const pageW = 210;
+    const pageH = 297;
 
-    // 两列布局
-    const gap = 8;
-    const colW = (innerW - gap) / 2;
+    // 复印件常见留白
+    const margin = 15;
+    const innerW = pageW - margin * 2;
+    const innerH = pageH - margin * 2;
 
-    // 证件图按比例放入（contain）
-    const cardW = colW;
-    const cardH = cardW / CARD_RATIO;
+    // 上下排
+    const gap = 20;
 
-    const y = 25; // 顶部留白
-    const x1 = margin;
-    const x2 = margin + colW + gap;
+    let cardW = innerW;
+    let cardH = cardW / CARD_RATIO;
 
-    // 标题可去掉（你要“完全无字”我再给你一版）
-    pdf.setFontSize(12);
-    pdf.text('IC (Front / Back)', margin, 15);
+    const maxCardH = (innerH - gap) / 2;
+    if (cardH > maxCardH) {
+      cardH = maxCardH;
+      cardW = cardH * CARD_RATIO;
+    }
 
-    pdf.addImage(frontDataUrl, 'JPEG', x1, y, cardW, cardH);
-    pdf.addImage(backDataUrl,  'JPEG', x2, y, cardW, cardH);
+    const x = (pageW - cardW) / 2;
+    const y1 = margin;
+    const y2 = margin + cardH + gap;
 
-    pdf.save('IC_front_back_A4.pdf');
+    pdf.addImage(frontDataUrl, 'JPEG', x, y1, cardW, cardH);
+    pdf.addImage(backDataUrl,  'JPEG', x, y2, cardW, cardH);
+
+    pdf.save('IC_A4.pdf');
   };
 
-  updateState();
+  setMsg(true, '等待拍照');
 })();
 </script>
 </body>
