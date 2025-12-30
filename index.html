@@ -3,214 +3,280 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>身份证智能扫描</title>
+    <title>身份证高清扫描</title>
     <style>
-        /* --- 1. 基础重置 --- */
-        * {
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-            outline: none;
-        }
-
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
         body {
-            margin: 0;
-            padding: 20px 15px;
-            /* 恢复你喜欢的深色高级感背景 */
-            background-color: #1a1a1a;
+            margin: 0; padding: 20px;
+            background-color: #111;
             color: #fff;
-            font-family: -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif;
-            min-height: 100vh;
+            font-family: sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
+            min-height: 100vh;
         }
 
-        h2 {
-            font-size: 18px;
-            margin-bottom: 25px;
-            font-weight: 500;
-            letter-spacing: 1px;
-            opacity: 0.9;
-        }
+        h2 { margin-bottom: 20px; font-size: 18px; letter-spacing: 1px; }
 
-        /* --- 2. 核心容器修复 --- */
-        .container {
-            width: 100%;
-            max-width: 420px; /* 限制宽度，防止iPad上拉伸太长 */
-        }
+        /* --- 列表容器 --- */
+        .list-container { width: 100%; max-width: 450px; }
 
-        .upload-group {
-            margin-bottom: 30px;
+        /* --- 结果显示卡片 --- */
+        .result-card {
+            background: #222;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            border: 1px solid #333;
         }
-
-        .label-row {
+        
+        .card-header {
+            padding: 12px 15px;
+            background: #333;
+            font-size: 14px;
             display: flex;
             justify-content: space-between;
-            margin-bottom: 10px;
-            font-size: 14px;
-            color: #ccc;
+            align-items: center;
         }
 
-        /* --- 3. 扫描框 (解决安卓框架问题的关键) --- */
-        .scan-box {
-            position: relative; /* 定位基准 */
+        .img-area {
             width: 100%;
-            
-            /* 【安卓修复】同时使用固定高度作为保底，防止高度塌陷 */
-            height: 230px; 
-            
-            background-color: #252525;
-            border-radius: 12px;
-            overflow: hidden; /* 裁剪圆角 */
-            border: 1px dashed #555;
-            transition: all 0.3s;
-        }
-
-        /* 选中状态高亮 */
-        .scan-box.active {
-            border: 1px solid #4a90e2;
-            background-color: #000;
-        }
-
-        /* --- 4. 内部元素布局 --- */
-        /* 提示层：默认显示 */
-        .placeholder-layer {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
+            height: 220px;
+            background: #000;
+            position: relative;
             display: flex;
-            flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 1;
-            pointer-events: none; /* 让点击穿透到底下的input */
         }
 
-        .icon-camera { font-size: 36px; margin-bottom: 8px; opacity: 0.8; }
-        .hint-text { font-size: 12px; color: #888; }
-
-        /* --- 5. 图片预览层 (解决照片居中) --- */
-        .preview-layer {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 2;
+        /* 显示拍好的照片 */
+        .scanned-img {
+            max-width: 100%;
+            max-height: 100%;
             display: none; /* 默认隐藏 */
-            background-color: #000;
         }
 
-        .preview-layer img {
+        .placeholder-text {
+            color: #666;
+            font-size: 14px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .placeholder-text span { font-size: 30px; margin-bottom: 10px; }
+
+        /* 激活按钮 */
+        .scan-btn {
             width: 100%;
-            height: 100%;
-            /* 【核心代码】Contain: 保证长边对齐，完整显示，自动居中，不裁剪 */
-            object-fit: contain; 
-        }
-
-        /* --- 6. 装饰角标 (恢复视觉完整性) --- */
-        .corner {
-            position: absolute;
-            width: 20px; height: 20px;
-            border-color: #4a90e2; border-style: solid;
-            pointer-events: none; z-index: 3;
-        }
-        .tl { top: 12px; left: 12px; border-width: 3px 0 0 3px; }
-        .tr { top: 12px; right: 12px; border-width: 3px 3px 0 0; }
-        .bl { bottom: 12px; left: 12px; border-width: 0 0 3px 3px; }
-        .br { bottom: 12px; right: 12px; border-width: 0 3px 3px 0; }
-
-        /* --- 7. 【苹果修复终极方案】 --- */
-        /* 透明 Input 覆盖层：不需要JS click，直接响应手指触摸 */
-        .native-input {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            opacity: 0; /* 完全透明 */
-            z-index: 10; /* 盖在最上面 */
+            padding: 15px;
+            background: #4a90e2;
+            color: white;
+            border: none;
+            font-size: 16px;
             cursor: pointer;
         }
 
-        /* 底部按钮 */
-        .submit-btn {
-            width: 100%;
-            height: 50px;
-            background: linear-gradient(135deg, #4a90e2, #007aff);
-            color: white;
-            border: none;
-            border-radius: 25px;
-            font-size: 16px;
-            font-weight: 600;
-            box-shadow: 0 4px 15px rgba(74, 144, 226, 0.4);
-            margin-top: 10px;
+        /* --- 核心：全屏相机模态框 --- */
+        #camera-modal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            z-index: 999;
+            display: none; /* 默认隐藏 */
+            flex-direction: column;
         }
+
+        /* 视频流容器 */
+        .video-wrapper {
+            position: relative;
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* 摄像头画面 */
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* --- 关键：覆盖在视频上的对准框 --- */
+        .guide-box {
+            position: absolute;
+            width: 85%; /* 屏幕宽度的85% */
+            /* 算出身份证比例高度 */
+            height: 0;
+            padding-bottom: 54%; /* 85% / 1.58 ≈ 54% */
+            border: 2px solid #00ff00; /* 绿色对准框 */
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); /* 框外变暗 */
+            border-radius: 8px;
+            z-index: 10;
+        }
+
+        .guide-text {
+            position: absolute;
+            top: -30px;
+            width: 100%;
+            text-align: center;
+            color: #00ff00;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px black;
+        }
+
+        /* 底部操作栏 */
+        .camera-controls {
+            height: 120px;
+            background: #000;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding-bottom: 20px;
+        }
+
+        .btn-cancel {
+            color: #fff;
+            background: transparent;
+            border: none;
+            font-size: 16px;
+            padding: 10px;
+        }
+
+        .btn-snap {
+            width: 70px;
+            height: 70px;
+            background: #fff;
+            border-radius: 50%;
+            border: 5px solid #ccc;
+        }
+
+        /* 隐藏的 Canvas 用于截图 */
+        canvas { display: none; }
+
     </style>
 </head>
 <body>
 
-    <h2>身份证上传系统</h2>
+    <h2>身份证智能采集</h2>
 
-    <div class="container">
-
-        <div class="upload-group">
-            <div class="label-row">
-                <span>身份证正面</span>
-                <span>人像面</span>
+    <div class="list-container">
+        
+        <div class="result-card">
+            <div class="card-header">
+                <span>身份证正面 (人像)</span>
             </div>
-            
-            <div class="scan-box" id="box-front">
-                <div class="corner tl"></div><div class="corner tr"></div>
-                <div class="corner bl"></div><div class="corner br"></div>
-
-                <div class="placeholder-layer">
-                    <div class="icon-camera">📷</div>
-                    <div class="hint-text">点击拍摄/上传</div>
+            <div class="img-area">
+                <div class="placeholder-text" id="ph-front">
+                    <span>📷</span>
+                    <div>尚未扫描</div>
                 </div>
-
-                <div class="preview-layer" id="preview-layer-front">
-                    <img id="img-front">
-                </div>
-
-                <input type="file" class="native-input" accept="image/*" onchange="showImage(this, 'img-front', 'preview-layer-front', 'box-front')">
+                <img id="img-front" class="scanned-img">
             </div>
+            <button class="scan-btn" onclick="openCamera('front')">启动扫描仪</button>
         </div>
 
-        <div class="upload-group">
-            <div class="label-row">
-                <span>身份证反面</span>
-                <span>国徽面</span>
+        <div class="result-card">
+            <div class="card-header">
+                <span>身份证反面 (国徽)</span>
             </div>
-            
-            <div class="scan-box" id="box-back">
-                <div class="corner tl"></div><div class="corner tr"></div>
-                <div class="corner bl"></div><div class="corner br"></div>
-
-                <div class="placeholder-layer">
-                    <div class="icon-camera">🛡️</div>
-                    <div class="hint-text">点击拍摄/上传</div>
+            <div class="img-area">
+                <div class="placeholder-text" id="ph-back">
+                    <span>🛡️</span>
+                    <div>尚未扫描</div>
                 </div>
-
-                <div class="preview-layer" id="preview-layer-back">
-                    <img id="img-back">
-                </div>
-
-                <input type="file" class="native-input" accept="image/*" onchange="showImage(this, 'img-back', 'preview-layer-back', 'box-back')">
+                <img id="img-back" class="scanned-img">
             </div>
+            <button class="scan-btn" onclick="openCamera('back')">启动扫描仪</button>
         </div>
-
-        <button class="submit-btn" onclick="alert('准备提交...')">确认上传</button>
 
     </div>
 
+    <div id="camera-modal">
+        <div class="video-wrapper">
+            <video id="video-feed" autoplay playsinline muted></video>
+            
+            <div class="guide-box">
+                <div class="guide-text">请将证件对齐绿框</div>
+            </div>
+        </div>
+        
+        <div class="camera-controls">
+            <button class="btn-cancel" onclick="closeCamera()">取消</button>
+            <button class="btn-snap" onclick="takePhoto()"></button>
+            <div style="width: 50px;"></div> </div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
     <script>
-        // 极简 JS：只负责显示图片，不负责调起摄像头（因为Input自己会做）
-        function showImage(input, imgId, layerId, boxId) {
-            if (input.files && input.files[0]) {
-                var reader = new FileReader();
-                reader.onload = function(e) {
-                    // 设置图片源
-                    document.getElementById(imgId).src = e.target.result;
-                    // 显示预览层
-                    document.getElementById(layerId).style.display = 'block';
-                    // 激活边框高亮
-                    document.getElementById(boxId).classList.add('active');
-                }
-                reader.readAsDataURL(input.files[0]);
+        let currentTarget = ''; // 记录当前拍的是正面还是反面
+        let videoStream = null;
+        const video = document.getElementById('video-feed');
+        const canvas = document.getElementById('canvas');
+        const modal = document.getElementById('camera-modal');
+
+        // 1. 打开相机
+        async function openCamera(target) {
+            currentTarget = target;
+            modal.style.display = 'flex'; // 显示全屏弹窗
+
+            // 核心：请求后置摄像头 (environment)
+            const constraints = {
+                video: {
+                    facingMode: 'environment', // 强制后置
+                    width: { ideal: 1920 },    // 尽可能高清
+                    height: { ideal: 1080 }
+                },
+                audio: false
+            };
+
+            try {
+                // 调用浏览器原生相机流
+                videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = videoStream;
+            } catch (err) {
+                alert("无法启动相机，请确保允许浏览器访问摄像头权限。\n错误: " + err.name);
+                closeCamera();
+            }
+        }
+
+        // 2. 拍照截屏
+        function takePhoto() {
+            if (!videoStream) return;
+
+            // 设置画布尺寸等于视频尺寸
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            // 将当前视频帧画到画布上
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // 转换成图片 DataURL
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+
+            // 回显到主界面
+            const imgEl = document.getElementById('img-' + currentTarget);
+            const phEl = document.getElementById('ph-' + currentTarget);
+            
+            imgEl.src = dataUrl;
+            imgEl.style.display = 'block';
+            phEl.style.display = 'none'; // 隐藏占位符
+
+            // 关闭相机
+            closeCamera();
+        }
+
+        // 3. 关闭相机并清理
+        function closeCamera() {
+            modal.style.display = 'none';
+            // 停止占用摄像头
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
             }
         }
     </script>
