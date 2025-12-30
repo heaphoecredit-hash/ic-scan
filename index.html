@@ -2,213 +2,172 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>身份证拍照完美修复版</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>我的个人展示</title>
     <style>
-        /* 1. 全局重置 */
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        
+        /* 全局重置，防止不同浏览器自带边距导致的错位 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent; /* 取消手机点击时的高亮背景 */
+        }
+
         body {
-            font-family: system-ui, -apple-system, sans-serif;
+            /* 【解决问题1】：框架居中，背景色护眼 */
             background-color: #f0f2f5;
-            padding: 20px;
-            max-width: 600px;
-            margin: 0 auto; /* 页面整体居中 */
-        }
-
-        h2 {
-            text-align: center;
-            color: #333;
-            margin-bottom: 20px;
-            font-size: 18px;
-        }
-
-        /* 2. 卡片容器 */
-        .card-box {
-            background: #fff;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 25px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        }
-
-        .card-title {
-            font-weight: bold;
-            margin-bottom: 15px;
-            text-align: center;
-            color: #444;
-        }
-
-        /* 3. 预览区域 - 完美居中的核心 */
-        .preview-area {
-            width: 100%;
-            height: 220px; /* 固定高度，模拟身份证比例 */
-            background-color: #eef2f5;
-            border: 2px dashed #cbd5e1;
-            border-radius: 8px;
-            position: relative;
-            
-            /* 【绝对关键】Flex 布局：让内部图片无条件上下左右居中 */
             display: flex;
             justify-content: center;
             align-items: center;
-            overflow: hidden;
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         }
 
-        /* 4. 图片样式 - 解决偏左/变形 */
-        .preview-img {
-            display: none; /* 默认隐藏 */
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain; /* 保证图片完整显示，不裁切 */
-            z-index: 2; /* 确保在文字上方 */
+        /* 核心容器 */
+        .scene {
+            width: 300px;
+            height: 450px;
+            perspective: 1000px; /* 3D 景深，让翻转看起来有立体感 */
         }
 
-        /* 占位文字 */
-        .placeholder {
-            color: #94a3b8;
-            font-size: 14px;
-            position: absolute;
-            z-index: 1;
-            pointer-events: none;
-        }
-
-        /* 5. 按钮样式 */
-        .btn-wrapper {
-            margin-top: 15px;
-            position: relative;
+        /* 卡片主体 */
+        .card {
             width: 100%;
-            height: 45px;
-            background-color: #007bff;
-            border-radius: 8px;
-            text-align: center;
-            line-height: 45px;
-            color: #fff;
-            font-weight: bold;
-            font-size: 16px;
-            overflow: hidden;
-            box-shadow: 0 2px 6px rgba(0,123,255,0.3);
-        }
-
-        /* 6. 隐形的文件输入框 */
-        .btn-wrapper input[type=file] {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            opacity: 0;
+            height: 100%;
+            position: relative;
+            transition: transform 0.8s;
+            transform-style: preserve-3d;
             cursor: pointer;
         }
 
-        /* 加载状态 */
-        .loading-tip {
-            text-align: center;
-            font-size: 12px;
+        /* 点击后添加翻转类名 */
+        .card.is-flipped {
+            transform: rotateY(180deg);
+        }
+
+        /* 【解决问题2】：正反面公共样式 */
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            /* 关键：隐藏背面，防止翻转时穿模 */
+            -webkit-backface-visibility: hidden; 
+            backface-visibility: hidden;
+            overflow: hidden; /* 防止图片溢出圆角 */
+            background: white;
+            
+            /* 内容垂直居中 */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* --- 正面样式 --- */
+        .card-face-front {
+            background: #ffffff;
+        }
+
+        /* 【解决问题4】：照片完美居中且不变形的核心代码 */
+        .photo-container {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%; /* 圆形头像，如果想要方形去掉这行 */
+            overflow: hidden;
+            border: 4px solid #fff;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            background-color: #eee; /* 图片加载前的占位色 */
+        }
+
+        .photo-container img {
+            width: 100%;
+            height: 100%;
+            /* 核心：Cover 模式，自动裁切填充，永不变形 */
+            object-fit: cover; 
+            display: block;
+        }
+
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .subtitle {
+            font-size: 14px;
             color: #666;
             margin-top: 8px;
-            display: none;
         }
+
+        .hint {
+            position: absolute;
+            bottom: 20px;
+            font-size: 12px;
+            color: #999;
+            animation: pulse 2s infinite;
+        }
+
+        /* --- 反面样式 --- */
+        .card-face-back {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            transform: rotateY(180deg); /* 初始状态就是翻转过去的 */
+        }
+
+        .info-row {
+            margin: 10px 0;
+            font-size: 16px;
+        }
+
+        /* 简单的指引动画 */
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+
     </style>
 </head>
 <body>
 
-    <h2>身份证信息采集</h2>
+    <div class="scene">
+        <div class="card" onclick="flipCard(this)">
+            
+            <div class="card-face card-face-front">
+                <div class="photo-container">
+                    <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=80" alt="用户头像">
+                </div>
+                <div class="title">你的名字</div>
+                <div class="subtitle">前端开发工程师 / 设计师</div>
+                <div class="hint">👆 点击卡片查看背面</div>
+            </div>
 
-    <div class="card-box">
-        <div class="card-title">请拍摄身份证 - 正面 (人像面)</div>
-        
-        <div class="preview-area">
-            <span class="placeholder" id="text-front">暂无照片</span>
-            <img id="img-front" class="preview-img" alt="正面">
-        </div>
+            <div class="card-face card-face-back">
+                <div class="info-row">📱 微信：WeChatID</div>
+                <div class="info-row">📧 邮箱：email@example.com</div>
+                <div class="info-row">📍 坐标：中国 · 上海</div>
+                <div class="hint" style="color: rgba(255,255,255,0.7)">👆 点击翻回正面</div>
+            </div>
 
-        <div class="btn-wrapper">
-            📷 启动相机拍摄正面
-            <input type="file" accept="image/*" capture="environment" 
-                   onchange="processPhoto(this, 'img-front', 'text-front', 'loading-front')">
         </div>
-        <div id="loading-front" class="loading-tip">正在处理照片格式...</div>
-    </div>
-
-    <div class="card-box">
-        <div class="card-title">请拍摄身份证 - 反面 (国徽面)</div>
-        
-        <div class="preview-area">
-            <span class="placeholder" id="text-back">暂无照片</span>
-            <img id="img-back" class="preview-img" alt="反面">
-        </div>
-
-        <div class="btn-wrapper">
-            📷 启动相机拍摄反面
-            <input type="file" accept="image/*" capture="environment" 
-                   onchange="processPhoto(this, 'img-back', 'text-back', 'loading-back')">
-        </div>
-        <div id="loading-back" class="loading-tip">正在处理照片格式...</div>
     </div>
 
     <script>
-        /**
-         * 核心处理函数：解决所有兼容性问题
-         * @param {Object} input - input标签本身
-         * @param {String} imgId - 图片标签的ID
-         * @param {String} textId - 占位文字的ID
-         * @param {String} loadingId - 加载提示的ID
-         */
-        function processPhoto(input, imgId, textId, loadingId) {
-            const file = input.files[0];
-            if (!file) return;
-
-            // 1. 显示加载中 (处理大图需要时间)
-            document.getElementById(loadingId).style.display = 'block';
-
-            const reader = new FileReader();
-            
-            // 2. 读取文件
-            reader.onload = function(e) {
-                const img = new Image();
-                
-                img.onload = function() {
-                    // 3. 创建 Canvas 画布
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-
-                    // 4. 这里的宽高设置非常重要，确保图片不被拉伸
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-
-                    // 5. 将图片画在画布上
-                    // 这一步是魔法：它会自动去除 iOS 照片的旋转信息和特殊格式
-                    ctx.drawImage(img, 0, 0, img.width, img.height);
-
-                    // 6. 强制转为 JPG (解决苹果打不开的问题)
-                    // 0.8 是压缩质量，既清晰又不会太大
-                    const standardBase64 = canvas.toDataURL('image/jpeg', 0.8);
-
-                    // 7. 更新界面显示
-                    const imgDom = document.getElementById(imgId);
-                    const textDom = document.getElementById(textId);
-                    
-                    imgDom.src = standardBase64;
-                    imgDom.style.display = 'block'; // 显示图片
-                    textDom.style.display = 'none'; // 隐藏文字
-                    
-                    // 隐藏加载中
-                    document.getElementById(loadingId).style.display = 'none';
-
-                    // 调试日志
-                    console.log('图片已完美处理: ' + imgId);
-                };
-
-                // 图片加载失败处理
-                img.onerror = function() {
-                    alert('图片解析失败，请重新拍摄');
-                    document.getElementById(loadingId).style.display = 'none';
-                };
-
-                img.src = e.target.result;
-            };
-
-            reader.readAsDataURL(file);
+        // 【解决问题3】：极简的 JS，兼容所有新老手机
+        function flipCard(element) {
+            // 切换 class 来控制翻转
+            element.classList.toggle('is-flipped');
         }
+
+        // 防止 iOS Safari 双击缩放的辅助代码
+        document.addEventListener('touchstart', function(event) {
+            if (event.touches.length > 1) {
+                event.preventDefault();
+            }
+        }, { passive: false });
     </script>
 </body>
 </html>
