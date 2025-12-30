@@ -2,224 +2,147 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>身份证扫描上传</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>证件上传</title>
     <style>
-        /* --- 全局重置 --- */
-        * {
-            box-sizing: border-box;
-            outline: none;
-            -webkit-tap-highlight-color: transparent;
-        }
-
+        /* 全局初始化 */
         body {
             margin: 0;
             padding: 20px;
-            background-color: #1a1a1a; /* 使用深色背景，更像扫描App，突出证件 */
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            color: #fff;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
+            background-color: #f2f2f2;
+            font-family: sans-serif;
+            /* 移除所有 Flex 居中，防止安卓部分机型高度塌陷 */
         }
 
         h2 {
-            font-size: 18px;
-            margin-bottom: 24px;
-            font-weight: 500;
-            opacity: 0.9;
             text-align: center;
+            color: #333;
+            margin-bottom: 20px;
         }
 
-        /* --- 【解决痛点1】：容器限制最大宽度，保证在电脑和iPad上也不变形 --- */
-        .container {
+        /* 外层容器 */
+        .upload-container {
             width: 100%;
-            max-width: 450px; /* 限制为手机宽度 */
+            max-width: 500px;
+            margin: 0 auto; /* 水平居中 */
         }
 
-        /* --- 扫描框组件 --- */
-        .scan-box-wrapper {
+        /* --- 核心组件：上传框 --- */
+        .upload-box {
+            position: relative; /*以此为基准定位 */
+            width: 100%;
+            height: 220px; /* 【安卓修复】固定高度，最稳，防止塌陷 */
+            background-color: #ffffff;
+            border: 2px dashed #ccc;
+            border-radius: 10px;
             margin-bottom: 30px;
-        }
-
-        .label-text {
-            font-size: 14px;
-            color: #ccc;
-            margin-bottom: 8px;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        /* 核心扫描框 */
-        .scan-box {
-            position: relative;
-            width: 100%;
-            /* 【核心】：利用 padding-bottom 实现固定宽高比 1.58:1 (身份证比例) */
-            height: 0;
-            padding-bottom: 63%; 
-            background-color: #2a2a2a;
-            border-radius: 12px;
             overflow: hidden;
-            cursor: pointer;
-            border: 1px dashed #555;
-            transition: border-color 0.3s;
         }
 
-        /* 激活/上传后的状态 */
-        .scan-box.active {
-            border: 1px solid #4a90e2;
-        }
-
-        /* --- 【解决痛点4】：照片居中且完整显示的绝对方案 --- */
-        .preview-img {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            /* object-fit: contain 是关键！ */
-            /* 它保证图片完整显示，长边对齐，多余部分留黑，绝不裁剪内容 */
-            object-fit: contain; 
-            background-color: #000;
-            display: none; /* 默认隐藏 */
-            z-index: 10;
-        }
-
-        /* --- UI装饰：模拟扫描仪的四个角 --- */
-        .corner {
-            position: absolute;
-            width: 20px;
-            height: 20px;
-            border-color: #4a90e2;
-            border-style: solid;
-            pointer-events: none; /* 防止遮挡点击 */
-            z-index: 20; /* 在图片上面 */
-        }
-        .tl { top: 10px; left: 10px; border-width: 3px 0 0 3px; }
-        .tr { top: 10px; right: 10px; border-width: 3px 3px 0 0; }
-        .bl { bottom: 10px; left: 10px; border-width: 0 0 3px 3px; }
-        .br { bottom: 10px; right: 10px; border-width: 0 3px 3px 0; }
-
-        /* 占位提示内容（加号和文字） */
-        .placeholder {
+        /* 提示文字/图标（沉在底部） */
+        .bg-text {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            color: #666;
-            z-index: 1;
+            color: #aaa;
+            z-index: 1; 
         }
+        .bg-text span { font-size: 40px; margin-bottom: 10px; }
+        .bg-text p { margin: 0; font-size: 14px; }
 
-        .icon-camera {
-            font-size: 32px;
-            margin-bottom: 8px;
-            opacity: 0.7;
-        }
-
-        /* 隐藏原生 input */
-        input[type="file"] {
+        /* 预览图（中间层） */
+        .preview-img {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: contain; /* 【照片修复】保证完整居中，不裁剪 */
+            background-color: #000; /* 图片没铺满的地方显示黑底 */
             display: none;
+            z-index: 2;
         }
 
-        /* 提交按钮 */
-        .btn-submit {
+        /* --- 【苹果修复核心】 --- */
+        /* 把原生 input 撑满整个父容器，并设为透明 */
+        /* 这样用户点击任何地方，实际上都是点在 input 上 */
+        .real-input {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            opacity: 0; /* 完全透明 */
+            z-index: 3; /* 盖在最上面 */
+            cursor: pointer;
+        }
+
+        /* 标题样式 */
+        .label-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            display: block;
+            color: #333;
+        }
+
+        .btn {
             width: 100%;
-            padding: 14px;
-            background-color: #4a90e2;
+            height: 50px;
+            background-color: #007AFF;
             color: white;
             border: none;
-            border-radius: 50px;
+            border-radius: 25px;
             font-size: 16px;
-            font-weight: bold;
             margin-top: 10px;
-            box-shadow: 0 4px 15px rgba(74, 144, 226, 0.3);
         }
-        .btn-submit:active {
-            transform: scale(0.98);
-        }
-
     </style>
 </head>
 <body>
 
-    <h2>上传身份证件</h2>
+    <h2>上传身份证</h2>
 
-    <div class="container">
-        
-        <div class="scan-box-wrapper">
-            <div class="label-text">
-                <span>身份证正面</span>
-                <span>人像面</span>
+    <div class="upload-container">
+
+        <label class="label-title">身份证正面 (人像面)</label>
+        <div class="upload-box">
+            <div class="bg-text">
+                <span>📷</span>
+                <p>点击拍摄/上传正面</p>
             </div>
             
-            <div class="scan-box" onclick="document.getElementById('file-front').click()">
-                <div class="corner tl"></div><div class="corner tr"></div>
-                <div class="corner bl"></div><div class="corner br"></div>
-                
-                <div class="placeholder">
-                    <div class="icon-camera">📷</div>
-                    <div style="font-size:12px;">点击拍摄/上传</div>
-                </div>
+            <img id="img-1" class="preview-img">
 
-                <img id="img-front" class="preview-img">
-            </div>
-
-            <input type="file" id="file-front" accept="image/*" onchange="previewImage(this, 'img-front')">
+            <input type="file" class="real-input" accept="image/*" onchange="showImg(this, 'img-1')">
         </div>
 
 
-        <div class="scan-box-wrapper">
-            <div class="label-text">
-                <span>身份证反面</span>
-                <span>国徽面</span>
+        <label class="label-title">身份证反面 (国徽面)</label>
+        <div class="upload-box">
+            <div class="bg-text">
+                <span>🛡️</span>
+                <p>点击拍摄/上传反面</p>
             </div>
+            
+            <img id="img-2" class="preview-img">
 
-            <div class="scan-box" onclick="document.getElementById('file-back').click()">
-                <div class="corner tl"></div><div class="corner tr"></div>
-                <div class="corner bl"></div><div class="corner br"></div>
-
-                <div class="placeholder">
-                    <div class="icon-camera">🛡️</div>
-                    <div style="font-size:12px;">点击拍摄/上传</div>
-                </div>
-
-                <img id="img-back" class="preview-img">
-            </div>
-
-            <input type="file" id="file-back" accept="image/*" onchange="previewImage(this, 'img-back')">
+            <input type="file" class="real-input" accept="image/*" onchange="showImg(this, 'img-2')">
         </div>
 
-        <button class="btn-submit" onclick="alert('图片已就绪，可对接后端API')">确认提交</button>
+        <button class="btn" onclick="alert('提交成功')">确认提交</button>
 
     </div>
 
     <script>
-        /**
-         * 图片预览通用函数
-         * @param {HTMLInputElement} input - 文件输入框
-         * @param {string} imgId - 预览图的img标签ID
-         */
-        function previewImage(input, imgId) {
-            // 确保有文件被选中
+        // 最简单的图片预览逻辑
+        function showImg(input, imgId) {
             if (input.files && input.files[0]) {
                 var reader = new FileReader();
-                
                 reader.onload = function(e) {
                     var img = document.getElementById(imgId);
                     img.src = e.target.result;
                     img.style.display = 'block'; // 显示图片
-                    
-                    // 给父级框添加高亮边框
-                    img.parentElement.classList.add('active');
                 }
-                
-                // 读取文件（解决苹果/安卓兼容性的关键，不用后台也能看图）
                 reader.readAsDataURL(input.files[0]);
             }
         }
     </script>
+
 </body>
 </html>
