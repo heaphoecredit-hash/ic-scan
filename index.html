@@ -1,228 +1,265 @@
-<!doctype html>
-<html lang="zh-Hans">
+<!DOCTYPE html>
+<html lang="zh-CN">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>IC 正反面 → A4 PDF（上下排，复印大小）</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>身份证扫描转PDF</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: #f3f4f6;
+            font-family: -apple-system, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 10px;
+            min-height: 100vh;
+        }
 
-  <!-- jsPDF：直接生成并下载 PDF -->
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+        /* 标题栏 */
+        .header {
+            margin-bottom: 20px;
+            text-align: center;
+            color: #333;
+        }
 
-  <style>
-    :root{
-      --bg:#0b0b0f; --card:#12121a; --line:#2a2a36; --txt:#fff; --muted:#b9b9c6; --accent:#00d084;
-    }
-    *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
-    .wrap{max-width:900px;margin:0 auto;padding:14px}
-    .card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
-    .head{padding:12px 14px;border-bottom:1px solid var(--line)}
-    .title{font-weight:800}
-    .sub{margin-top:6px;color:var(--muted);font-size:12px;line-height:1.45}
-    .controls{padding:12px 14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-    button{
-      appearance:none;border:0;border-radius:12px;padding:12px 14px;
-      background:#0d3b2f;color:#eafff8;font-weight:800;cursor:pointer
-    }
-    button.ghost{background:transparent;border:1px solid var(--line);color:var(--txt);font-weight:800}
-    button:disabled{opacity:.45;cursor:not-allowed}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 14px 16px}
-    @media (max-width:780px){.grid{grid-template-columns:1fr}}
-    .slot{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#0a0a0f}
-    .slot .cap{padding:10px 12px;border-bottom:1px solid var(--line);color:var(--muted);font-size:12px}
-    .slot img{width:100%;height:220px;object-fit:contain;display:block;background:#000}
-    .note{padding:0 14px 14px;color:var(--muted);font-size:12px;line-height:1.45}
-    input[type=file]{display:none}
-    .ok{color:#bfffe8}
-    .bad{color:#ffd1d1}
-  </style>
+        /* A4 纸张容器 (预览区域) */
+        #pdf-content {
+            background: white;
+            width: 100%;
+            max-width: 595px; /* A4 宽度 72dpi */
+            aspect-ratio: 210/297; /* A4 比例 */
+            padding: 40px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-evenly;
+            align-items: center;
+            position: relative;
+        }
+
+        /* 扫描框样式 */
+        .scan-box {
+            width: 85.6%; /* 身份证标准比例 */
+            height: 42%;
+            border: 2px dashed #cbd5e1;
+            border-radius: 8px;
+            background-color: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            position: relative;
+            cursor: pointer;
+        }
+
+        /* 上传后的图片样式 */
+        .scan-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: none;
+        }
+
+        /* 提示文字 */
+        .tips {
+            text-align: center;
+            color: #94a3b8;
+            pointer-events: none;
+        }
+        .tips svg { width: 40px; height: 40px; margin-bottom: 10px; fill: #cbd5e1; }
+
+        /* 底部操作栏 */
+        .controls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: white;
+            padding: 15px 20px;
+            box-shadow: 0 -4px 10px rgba(0,0,0,0.05);
+            display: flex;
+            gap: 15px;
+            z-index: 100;
+        }
+
+        .btn {
+            flex: 1;
+            height: 50px;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-primary {
+            background-color: #3b82f6;
+            color: white;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+        .btn-primary:active { transform: scale(0.98); }
+
+        .btn-reset {
+            background-color: #f1f5f9;
+            color: #475569;
+            flex: 0.4;
+        }
+
+        /* 加载动画 */
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 999;
+        }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 4px solid #fff;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* 为了生成的PDF美观，生成时隐藏边框 */
+        .generating .scan-box {
+            border: 1px solid #eee; /* 生成时只保留极细边框 */
+            background: white;
+        }
+        .generating .tips { display: none; }
+        
+        /* 隐藏input */
+        input[type="file"] { display: none; }
+    </style>
 </head>
-
 <body>
-  <div class="wrap">
-    <div class="card">
-      <div class="head">
-        <div class="title">IC 正反面 → A4 PDF（上下排，复印大小）</div>
-        <div class="sub">
-          使用系统相机（后摄优先），拍完自动裁切为证件比例；直接下载 PDF，不经过打印。
-        </div>
-      </div>
 
-      <div class="controls">
-        <button id="frontBtn">拍 IC 正面（后摄）</button>
-        <button id="backBtn">拍 IC 反面（后摄）</button>
-        <button id="saveBtn" disabled>保存 PDF</button>
-        <button id="clearBtn" class="ghost">清除重拍</button>
-      </div>
-
-      <div class="grid">
-        <div class="slot">
-          <div class="cap">正面预览（已自动裁切）</div>
-          <img id="frontImg" alt="front">
-        </div>
-        <div class="slot">
-          <div class="cap">反面预览（已自动裁切）</div>
-          <img id="backImg" alt="back">
-        </div>
-      </div>
-
-      <div class="note" id="msg">
-        状态：<span class="ok">等待拍照</span>
-      </div>
+    <div class="header">
+        <h3>证件扫描复印件生成</h3>
     </div>
-  </div>
 
-  <!-- 系统相机：安卓后摄稳定；iPhone Safari 也可用 -->
-  <input id="frontInput" type="file" accept="image/*" capture="environment">
-  <input id="backInput"  type="file" accept="image/*" capture="environment">
+    <div id="pdf-content">
+        <div class="scan-box" onclick="document.getElementById('file-front').click()">
+            <div class="tips" id="tip-front">
+                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-2-5.5h4v2h-4v-2zm0-4h4v2h-4v-2zm0-4h4v2h-4v-2z"/></svg>
+                <p>点击上传人像面</p>
+            </div>
+            <img id="img-front" />
+        </div>
+        <input type="file" id="file-front" accept="image/*" onchange="handleFile(this, 'front')">
 
-<script>
-(() => {
-  const frontBtn = document.getElementById('frontBtn');
-  const backBtn  = document.getElementById('backBtn');
-  const saveBtn  = document.getElementById('saveBtn');
-  const clearBtn = document.getElementById('clearBtn');
+        <div class="scan-box" onclick="document.getElementById('file-back').click()">
+            <div class="tips" id="tip-back">
+                <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12zM12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z"/></svg>
+                <p>点击上传国徽面</p>
+            </div>
+            <img id="img-back" />
+        </div>
+        <input type="file" id="file-back" accept="image/*" onchange="handleFile(this, 'back')">
+    </div>
 
-  const frontInput = document.getElementById('frontInput');
-  const backInput  = document.getElementById('backInput');
+    <div style="height: 100px;"></div>
 
-  const frontImg = document.getElementById('frontImg');
-  const backImg  = document.getElementById('backImg');
+    <div class="controls">
+        <button class="btn btn-reset" onclick="location.reload()">重置</button>
+        <button class="btn btn-primary" onclick="saveAsPDF()">保存 PDF 文件</button>
+    </div>
 
-  const msg = document.getElementById('msg');
+    <div class="loading-overlay" id="loading">
+        <div class="spinner"></div>
+        <p>正在生成 PDF...</p>
+    </div>
 
-  let frontDataUrl = '';
-  let backDataUrl  = '';
+    <script>
+        // 处理图片上传与压缩显示
+        function handleFile(input, side) {
+            const file = input.files[0];
+            if (!file) return;
 
-  // 证件比例（ID-1：85.6 × 54 mm）
-  const CARD_RATIO = 85.6 / 54;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    // 显示图片并隐藏提示
+                    const imgElem = document.getElementById('img-' + side);
+                    const tipElem = document.getElementById('tip-' + side);
+                    
+                    imgElem.src = resizeImage(img); // 使用压缩后的Base64
+                    imgElem.style.display = 'block';
+                    tipElem.style.display = 'none';
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
 
-  function setMsg(ok, text){
-    msg.innerHTML = '状态：' + (ok ? `<span class="ok">${text}</span>` : `<span class="bad">${text}</span>`);
-  }
+        // 简单的图片压缩逻辑 (防止生成PDF时内存溢出)
+        function resizeImage(img) {
+            const canvas = document.createElement('canvas');
+            const maxDim = 1200; // 限制最大长宽
+            let width = img.width;
+            let height = img.height;
 
-  function updateState(){
-    saveBtn.disabled = !(frontDataUrl && backDataUrl);
-  }
+            if (width > height) {
+                if (width > maxDim) { height *= maxDim / width; width = maxDim; }
+            } else {
+                if (height > maxDim) { width *= maxDim / height; height = maxDim; }
+            }
 
-  // 防连点
-  let locked = false;
-  function lock(){ locked = true; setTimeout(()=>locked=false, 500); }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            return canvas.toDataURL('image/jpeg', 0.8);
+        }
 
-  function fileToImage(file){
-    return new Promise((resolve, reject) => {
-      const url = URL.createObjectURL(file);
-      const img = new Image();
-      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
-      img.onerror = reject;
-      img.src = url;
-    });
-  }
+        // PDF 生成逻辑
+        function saveAsPDF() {
+            const element = document.getElementById('pdf-content');
+            const loading = document.getElementById('loading');
+            
+            // 检查是否上传了图片
+            const frontSrc = document.getElementById('img-front').src;
+            const backSrc = document.getElementById('img-back').src;
+            if (!frontSrc && !backSrc) {
+                alert('请至少上传一张证件照片');
+                return;
+            }
 
-  // 自动裁切为证件比例（去掉多余背景）
-  function cropToCard(img){
-    const sw = img.naturalWidth;
-    const sh = img.naturalHeight;
+            loading.style.display = 'flex';
+            element.classList.add('generating'); // 添加样式去除虚线框
 
-    let cw = sw;
-    let ch = Math.round(cw / CARD_RATIO);
-    if (ch > sh) {
-      ch = sh;
-      cw = Math.round(ch * CARD_RATIO);
-    }
+            const opt = {
+                margin:       0,
+                filename:     '身份证复印件_' + new Date().getTime() + '.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true }, // 2倍缩放保证清晰度
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
 
-    const sx = Math.round((sw - cw) / 2);
-    const sy = Math.round((sh - ch) / 2);
-
-    const canvas = document.createElement('canvas');
-    canvas.width = cw;
-    canvas.height = ch;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, sx, sy, cw, ch, 0, 0, cw, ch);
-
-    return canvas.toDataURL('image/jpeg', 0.92);
-  }
-
-  async function handlePick(inputEl, side){
-    const file = inputEl.files && inputEl.files[0];
-    inputEl.value = '';
-    if(!file) return;
-
-    setMsg(true, '处理中…');
-    try{
-      const img = await fileToImage(file);
-      const cropped = cropToCard(img);
-
-      if(side === 'front'){
-        frontDataUrl = cropped;
-        frontImg.src = cropped;
-      }else{
-        backDataUrl = cropped;
-        backImg.src = cropped;
-      }
-
-      updateState();
-      setMsg(true, (frontDataUrl && backDataUrl) ? '已完成，可保存 PDF' : '已拍一面，请继续拍另一面');
-    }catch(e){
-      console.error(e);
-      setMsg(false, '处理失败，请重拍');
-    }
-  }
-
-  frontBtn.onclick = () => { if(locked) return; lock(); frontInput.click(); };
-  backBtn.onclick  = () => { if(locked) return; lock(); backInput.click(); };
-
-  frontInput.addEventListener('change', () => handlePick(frontInput, 'front'));
-  backInput.addEventListener('change',  () => handlePick(backInput, 'back'));
-
-  clearBtn.onclick = () => {
-    frontDataUrl = '';
-    backDataUrl = '';
-    frontImg.removeAttribute('src');
-    backImg.removeAttribute('src');
-    updateState();
-    setMsg(true, '已清除，等待拍照');
-  };
-
-  // 生成 A4 PDF：上下排，证件=普通复印大小，无文字
-  saveBtn.onclick = () => {
-    if(!(frontDataUrl && backDataUrl)) return;
-
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-
-    const pageW = 210;
-    const pageH = 297;
-
-    // 复印件常见留白
-    const margin = 15;
-    const innerW = pageW - margin * 2;
-    const innerH = pageH - margin * 2;
-
-    // 上下排
-    const gap = 20;
-
-    let cardW = innerW;
-    let cardH = cardW / CARD_RATIO;
-
-    const maxCardH = (innerH - gap) / 2;
-    if (cardH > maxCardH) {
-      cardH = maxCardH;
-      cardW = cardH * CARD_RATIO;
-    }
-
-    const x = (pageW - cardW) / 2;
-    const y1 = margin;
-    const y2 = margin + cardH + gap;
-
-    pdf.addImage(frontDataUrl, 'JPEG', x, y1, cardW, cardH);
-    pdf.addImage(backDataUrl,  'JPEG', x, y2, cardW, cardH);
-
-    pdf.save('IC_A4.pdf');
-  };
-
-  setMsg(true, '等待拍照');
-})();
-</script>
+            // 生成 PDF
+            html2pdf().set(opt).from(element).save().then(() => {
+                loading.style.display = 'none';
+                element.classList.remove('generating'); // 恢复原样
+            }).catch(err => {
+                console.error(err);
+                loading.style.display = 'none';
+                element.classList.remove('generating');
+                alert('生成失败，请重试');
+            });
+        }
+    </script>
 </body>
 </html>
